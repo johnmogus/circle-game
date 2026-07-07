@@ -32,7 +32,7 @@
         };
 
         const boss1 = {
-            shootingType: "boss1",
+            type: "boss1",
             x: 300, y: 200,
             speed: 5,
             size: 30,
@@ -41,11 +41,11 @@
         }
 
         const sideSniper = {
-            shootingType: "aimAtPlayer",
+            type: "aimAtPlayer",
             speed: 5,
-            size: 30,
+            size: 20,
             hitboxRadius: 40,
-            health: 100
+            health: 20
         }
 
 
@@ -97,17 +97,26 @@
         // Main Game Loop
         function update() {
             if (gameOver) return;
+
             tick++;
-            score++;
             scoreEl.innerText = score;
             if (cooldown > 0) cooldown--;
 
             // --- Add Enemies ---
             if (tick % 50 === 0) {
-                var startingSide = "left"
-                if (Math.round(Math.random) > 0.5) {
-                    startingSide = "right"
+                if (Math.random() > 0.5) {
+                    var leftSniper = sideSniper;
+                    leftSniper.x = 50;
+                    leftSniper.y = -10;
+                    enemies.push(leftSniper);
                 }
+                else {
+                    var rightSniper = sideSniper;
+                    rightSniper.x = 550;
+                    rightSniper.y = -10;
+                    enemies.push(rightSniper);
+                }
+
             }
 
 
@@ -135,11 +144,19 @@
                 cooldown = 10
             }
 
+            //Enemy Movement
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                var e = enemies[i]
+                if (e.type == "aimAtPlayer") {
+                    e.y += e.speed
+                }
+            }
+
 
             // --- Enemy Bullet Patterns ---
             for (let i = enemies.length - 1; i >= 0; i--) {
                 var e = enemies[i];
-                if (e.shootingType == "boss1") {
+                if (e.type == "boss1") {
                     // Pattern A: Spiral from center
                     if (tick % 4 === 0) {
                         const angle = (tick * 0.05) % (Math.PI * 2);
@@ -160,7 +177,7 @@
                         spawnBulletTowardsPlayer(e.x, e.y, player.x, player.y, 5)
                     }
                 }
-                if (e.shootingType == "aimAtPlayer") {
+                if (e.type == "aimAtPlayer") {
                     // Towards Player Bullets
                     if (tick % 20 === 0) {
                         spawnBulletTowardsPlayer(e.x, e.y, player.x, player.y, 5)
@@ -180,6 +197,7 @@
                         gameOver = true;
                         alert(`Game Over! Final Score: ${score}`);
                         window.location.reload();
+                        break;
                     }
                 }
 
@@ -190,6 +208,7 @@
                         if (dist < b.radius + e.hitboxRadius) {
                             b.alive = false;
                             e.health -= 10;
+                            score += 10;
                         }
                     }
                 }
@@ -200,10 +219,10 @@
                 }
             }
 
-            //remove dead enemies
+            //remove dead and off screen enemies
             for (let enemyIndex = enemies.length - 1; enemyIndex >= 0; enemyIndex--) {
                 var e = enemies[enemyIndex];
-                if (e.health == 0) {
+                if (e.health == 0 || e.x < -10 || e.x > canvas.width + 10 || e.y > canvas.height + 10) {
                     enemies.splice(enemyIndex, 1);
                 }
             }
@@ -215,12 +234,18 @@
             // Draw Enemies
             for (let i = enemies.length - 1; i >= 0; i--) {
                 var e = enemies[i];
-                if (e.shootingType == "boss1") {
+                if (e.type == "boss1") {
                     if (e.health > 0) {
                         ctx.font = "25px Arial";
                         ctx.fillText("Health: " + e.health, 10, 25);
                         //ctx.fillRect(0, 20, e.health, 20)
                     }
+                    ctx.fillStyle = 'purple';
+                    ctx.beginPath();
+                    ctx.arc(e.x, e.y, e.size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                else if (e.type == "aimAtPlayer") {
                     ctx.fillStyle = 'purple';
                     ctx.beginPath();
                     ctx.arc(e.x, e.y, e.size, 0, Math.PI * 2);
