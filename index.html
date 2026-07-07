@@ -31,6 +31,15 @@
             hitboxRadius: 4
         };
 
+        const boss = {
+            x: 300, y: 200,
+            speed: 5,
+            size: 30,
+            radius: 30,
+            hitboxRadius: 40,
+            health: 100
+        }
+
         // Input tracking
         const keys = {};
         window.addEventListener('keydown', e => keys[e.key] = true);
@@ -115,12 +124,21 @@
                 b.x += b.vx;
                 b.y += b.vy;
 
-                // Collision detection (Distance formula between bullet center and player core)
-                const dist = Math.hypot(b.x - player.x, b.y - player.y);
-                if (b.shooter == "enemy" && dist < b.radius + player.hitboxRadius) {
-                    gameOver = true;
-                    alert(`Game Over! Final Score: ${score}`);
-                    window.location.reload();
+                if (b.shooter == "enemy") {
+                    const dist = Math.hypot(b.x - player.x, b.y - player.y);
+                    if (dist < b.radius + player.hitboxRadius) {
+                        gameOver = true;
+                        alert(`Game Over! Final Score: ${score}`);
+                        window.location.reload();
+                    }
+                }
+
+                if (b.shooter == "player") {
+                    const dist = Math.hypot(b.x - boss.x, b.y - boss.y);
+                    if (dist < b.radius + boss.hitboxRadius) {
+                        boss.health -= 10
+                        bullets.splice(i, 1);
+                    }
                 }
 
                 // Remove off-screen bullets
@@ -131,13 +149,17 @@
 
             // --- 4. Render Everything ---
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            ctx.fillText("Hello World",10,80);
+            
+            if (boss.health > 0) {
+                ctx.font = "25px Arial";
+                ctx.fillText("Health: " + boss.health, 10, 25);
+                //ctx.fillRect(0, 20, boss.health, 20)
+            }
 
             // Draw Boss/Source
             ctx.fillStyle = 'purple';
             ctx.beginPath();
-            ctx.arc(300, 200, 30, 0, Math.PI * 2);
+            ctx.arc(boss.x, boss.y, boss.radius, 0, Math.PI * 2);
             ctx.fill();
 
             // Draw Player Ship
