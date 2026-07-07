@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Node.js Bullet Hell</title>
+    <style>
+        body { margin: 0; background: #111; color: white; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+        canvas { border: 2px solid #fff; background: #000; }
+        #ui { position: absolute; top: 10px; left: 10px; font-size: 20px; }
+    </style>
+</head>
+<body>
+    <div id="ui">Score: <span id="score">0</span></div>
+    <canvas id="gameCanvas" width="600" height="800"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+
+        // Game State
+        let score = 0;
+        let gameOver = false;
+
+        // Player object (Tiny hitbox for bullet hell precision)
+        const player = {
+            x: 300, y: 700,
+            speed: 5,
+            size: 15,
+            hitboxRadius: 4
+        };
+
+        // Input tracking
+        const keys = {};
+        window.addEventListener('keydown', e => keys[e.key] = true);
+        window.addEventListener('keyup', e => keys[e.key] = false);
+
+        // Bullets array
+        const bullets = [];
+        let tick = 0;
+        let cooldown = 0;
+    
+
+        // Spawn a ring of bullets
+        function spawnBulletRing(cx, cy, count, speed) {
+            for (let i = 0; i < count; i++) {
+                const angle = (i / count) * Math.PI * 2;
+                bullets.push({
+                    shooter: "enemy",
+                    x: cx,
+                    y: cy,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    radius: 5
+                });
+            }
+        }
+
+        function spawnPlayerBullets(cx, cy, radius, speed){
+            bullets.push({
+                shooter: "player",
+                x: cx,
+                y: cy,
+                vx: 0,
+                vy: -1 * speed,
+                radius: radius
+            });
+        }
+
+        // Main Game Loop
+        function update() {
+            if (gameOver) return;
+            tick++;
+            score++;
+            scoreEl.innerText = score;
+            if (cooldown > 0) cooldown--;
+
+            // --- 1. Player Movement ---
+            if (keys['ArrowUp'] || keys['w']) player.y -= player.speed;
+            if (keys['ArrowDown'] || keys['s']) player.y += player.speed;
+            if (keys['ArrowLeft'] || keys['a']) player.x -= player.speed;
+            if (keys['ArrowRight'] || keys['d']) player.x += player.speed;
+
+            // Clamp player to screen
+            player.x = Math.max(player.size, Math.min(canvas.width - player.size, player.x));
+            player.y = Math.max(player.size, Math.min(canvas.height - player.size, player.y));
+
+            if (keys['z'] && cooldown == 0) {
+                spawnPlayerBullets(player.x, player.y, 5, 2);
+                cooldown = 10
+            }
+
+
+            // --- 2. Enemy Bullet Patterns ---
+            // Pattern A: Spiral from center
+            if (tick % 4 === 0) {
+                const angle = (tick * 0.05) % (Math.PI * 2);
+                bullets.push({
+                    shooter: "enemy",
+                    x: 300, y: 200,
+                    vx: Math.cos(angle) * 3,
+                    vy: Math.sin(angle) * 3,
+                    radius: 6
+                });
+            }
+            // Pattern B: Burst rings
+            if (tick % 60 === 0) {
+                spawnBulletRing(300, 200, 16, 2);
+            }
+
+            // --- 3. Update & Check Bullets ---
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const b = bullets[i];
+                b.x += b.vx;
+                b.y += b.vy;
+
+                // Collision detection (Distance formula between bullet center and player core)
+                const dist = Math.hypot(b.x - player.x, b.y - player.y);
+                if (b.shooter == "enemy" && dist < b.radius + player.hitboxRadius) {
+                    gameOver = true;
+                    alert(`Game Over! Final Score: ${score}`);
+                    window.location.reload();
+                }
+
+                // Remove off-screen bullets
+                if (b.x < -10 || b.x > canvas.width + 10 || b.y < -10 || b.y > canvas.height + 10) {
+                    bullets.splice(i, 1);
+                }
+            }
+
+            // --- 4. Render Everything ---
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillText("Hello World",10,80);
+
+            // Draw Boss/Source
+            ctx.fillStyle = 'purple';
+            ctx.beginPath();
+            ctx.arc(300, 200, 30, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw Player Ship
+            ctx.fillStyle = '#00ffcc';
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.size, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw critical Hitbox core
+            ctx.fillStyle = 'red';
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.hitboxRadius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw Bullets
+            ctx.fillStyle = '#ff3336';
+            for (const b of bullets) {
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            requestAnimationFrame(update);
+        }
+
+        // Start the game
+        requestAnimationFrame(update);
+    </script>
+</body>
+</html>
