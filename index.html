@@ -19,14 +19,19 @@
         const ctx = canvas.getContext('2d');
         const scoreEl = document.getElementById('score');
 
+        const TICK_RATE = 60;
+        const MS_PER_TICK = 1000 / TICK_RATE;
+        let lastTick = performance.now();
+        let accumulator = 0;
+
+
         // Game State
         let score = 0;
         let gameOver = false;
 
-        // Player object (Tiny hitbox for bullet hell precision)
         const player = {
             x: 300, y: 700,
-            speed: 5,
+            speed: 10,
             size: 15,
             hitboxRadius: 4
         };
@@ -41,7 +46,7 @@
         }
 
         const sideSniper = {
-            type: "aimAtPlayer",
+            type: "sideSniper",
             speed: 5,
             size: 20,
             hitboxRadius: 40,
@@ -49,21 +54,18 @@
         }
 
 
-        const enemies = [boss1];
+        const enemies = [];
+        enemies.push(boss1);
+
+        const bullets = [];
 
         // Input tracking
         const keys = {};
         window.addEventListener('keydown', e => keys[e.key] = true);
         window.addEventListener('keyup', e => keys[e.key] = false);
 
-        // Bullets array
-        const bullets = [];
         let tick = 0;
         let cooldown = 0;
-
-        function RandomInt(min, max) {
-            return Math.floor(Math.random() * (max - min + 1)) + min;
-        }
 
         // Spawn a ring of bullets
         function spawnBulletRing(cx, cy, count, speed) {
@@ -92,18 +94,39 @@
             radius: 6
         });
         }
+
+        
+        function loop() {
+            const now = performance.now();
+            const delta = now - lastTick;
+            lastTick = now;
+
+            accumulator += delta;
+
+            while (accumulator >= MS_PER_TICK) {
+                update(MS_PER_TICK / 1000); // pass deltaTime in seconds
+                accumulator -= MS_PER_TICK;
+            }
+
+            requestAnimationFrame(loop);
+        }
         
 
         // Main Game Loop
-        function update() {
-            if (gameOver) return;
+        function update(dt) {
+            if (gameOver) {
+                alert(`Game Over! Final Score: ${score}`);
+                window.location.reload();
+                return;
+            }
 
-            tick++;
             scoreEl.innerText = score;
-            if (cooldown > 0) cooldown--;
+
+            tick += dt;
+            if (cooldown > 0) cooldown -= dt;
 
             // --- Add Enemies ---
-            if (tick % 50 === 0) {
+            if (tick % 1 === 0) {
                 if (Math.random() > 0.5) {
                     var leftSniper = sideSniper;
                     leftSniper.x = 50;
@@ -121,10 +144,10 @@
 
 
             // --- Movement ---
-            if (keys['ArrowUp'] || keys['w']) player.y -= player.speed;
-            if (keys['ArrowDown'] || keys['s']) player.y += player.speed;
-            if (keys['ArrowLeft'] || keys['a']) player.x -= player.speed;
-            if (keys['ArrowRight'] || keys['d']) player.x += player.speed;
+            if (keys['ArrowUp'] || keys['w']) player.y -= player.speed * dt;
+            if (keys['ArrowDown'] || keys['s']) player.y += player.speed * dt;
+            if (keys['ArrowLeft'] || keys['a']) player.x -= player.speed * dt;
+            if (keys['ArrowRight'] || keys['d']) player.x += player.speed * dt;
 
             // Clamp player to screen
             player.x = Math.max(player.size, Math.min(canvas.width - player.size, player.x));
@@ -138,72 +161,61 @@
                     x: player.x,
                     y: player.y,
                     vx: 0,
-                    vy: -10,
+                    vy: -100,
                     radius: 5
                 });
                 cooldown = 10
             }
 
-            //Enemy Movement
-            for (let i = enemies.length - 1; i >= 0; i--) {
-                var e = enemies[i]
-                if (e.type == "aimAtPlayer") {
-                    e.y += e.speed
-                }
-            }
 
-
-            // --- Enemy Bullet Patterns ---
-            for (let i = enemies.length - 1; i >= 0; i--) {
-                var e = enemies[i];
+            //Enemy AI
+            for (var e of enemies) {
                 if (e.type == "boss1") {
                     // Pattern A: Spiral from center
-                    if (tick % 4 === 0) {
+                    if (tick % 0.1 === 0) {
                         const angle = (tick * 0.05) % (Math.PI * 2);
                         bullets.push({
                             alive: true,
                             shooter: "enemy",
                             x: e.x, y: e.y,
-                            vx: Math.cos(angle) * 3,
-                            vy: Math.sin(angle) * 3,
+                            vx: Math.cos(angle) * 300,
+                            vy: Math.sin(angle) * 300,
                             radius: 6
                         });
                     }
                     // Pattern B: Burst rings
-                    if (tick % 60 === 0) {
-                        spawnBulletRing(e.x, e.y, 16, 2);
-                    }
-                    if (tick % 20 === 0) {
-                        spawnBulletTowardsPlayer(e.x, e.y, player.x, player.y, 5)
+                    if (tick % 1 === 0) {
+                        spawnBulletRing(e.x, e.y, 16, 200);
                     }
                 }
-                if (e.type == "aimAtPlayer") {
-                    // Towards Player Bullets
-                    if (tick % 20 === 0) {
-                        spawnBulletTowardsPlayer(e.x, e.y, player.x, player.y, 5)
+                if (e.type == "sideSniper") {
+                    //Move
+                    e.y += e.speed * dt
+                    //Shoot
+                    if (tick % 0.2 === 0) {
+                        spawnBulletTowardsPlayer(e.x, e.y, player.x, player.y, 5);
                     }
+                }
+                if (e.health == 0) {
+                    enemies.splice(enemies.findIndex(e), 1);
                 }
             }
 
             // --- Update & Check Bullets ---
-            for (let bulletIndex = bullets.length - 1; bulletIndex >= 0; bulletIndex--) {
-                var b = bullets[bulletIndex];
-                b.x += b.vx;
-                b.y += b.vy;
+            for (var b of bullets) {
+                b.x += b.vx * dt;
+                b.y += b.vy * dt;
 
                 if (b.shooter == "enemy") {
                     const dist = Math.hypot(b.x - player.x, b.y - player.y);
                     if (dist < b.radius + player.hitboxRadius) {
                         gameOver = true;
-                        alert(`Game Over! Final Score: ${score}`);
-                        window.location.reload();
                         break;
                     }
                 }
 
                 if (b.shooter == "player") {
-                    for (let enemyIndex = enemies.length - 1; enemyIndex >= 0; enemyIndex--) {
-                        var e = enemies[enemyIndex];
+                    for (var e of enemies) {
                         const dist = Math.hypot(b.x - e.x, b.y - e.y);
                         if (dist < b.radius + e.hitboxRadius) {
                             b.alive = false;
@@ -214,26 +226,17 @@
                 }
 
                 // Remove dead and off screen bullets
-                if (b.x < -10 || b.x > canvas.width + 10 || b.y < -10 || b.y > canvas.height + 10 || !b.alive) {
-                    bullets.splice(bulletIndex, 1);
+                if (b.x < -10 || b.x > canvas.width + 10 || b.y < -10 || b.y > canvas.height + 10 || b.alive == false) {
+                    bullets.splice(bullets.findIndex(e), 1);
                 }
             }
 
-            //remove dead and off screen enemies
-            for (let enemyIndex = enemies.length - 1; enemyIndex >= 0; enemyIndex--) {
-                var e = enemies[enemyIndex];
-                if (e.health == 0 || e.x < -10 || e.x > canvas.width + 10 || e.y > canvas.height + 10) {
-                    enemies.splice(enemyIndex, 1);
-                }
-            }
 
-            // --- Render Everything ---
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
+            ctx.fillText("Delta " + dt, 10, 40);
 
             // Draw Enemies
-            for (let i = enemies.length - 1; i >= 0; i--) {
-                var e = enemies[i];
+            for (var e of enemies) {
                 if (e.type == "boss1") {
                     if (e.health > 0) {
                         ctx.font = "25px Arial";
@@ -245,7 +248,7 @@
                     ctx.arc(e.x, e.y, e.size, 0, Math.PI * 2);
                     ctx.fill();
                 }
-                else if (e.type == "aimAtPlayer") {
+                else if (e.type == "sideSniper") {
                     ctx.fillStyle = 'purple';
                     ctx.beginPath();
                     ctx.arc(e.x, e.y, e.size, 0, Math.PI * 2);
@@ -267,17 +270,14 @@
 
             // Draw Bullets
             ctx.fillStyle = '#ff3336';
-            for (const b of bullets) {
+            for (var b of bullets) {
                 ctx.beginPath();
                 ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
                 ctx.fill();
             }
 
-            requestAnimationFrame(update);
         }
-
-        // Start the game
-        requestAnimationFrame(update);
+        loop();
     </script>
 </body>
 </html>
