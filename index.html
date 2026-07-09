@@ -31,10 +31,25 @@
 
         const player = {
             x: 300, y: 700,
-            speed: 10,
+            speed: 200,
             size: 15,
-            hitboxRadius: 4
+            hitboxRadius: 4,
+            shotCooldown: 0
         };
+
+        const attackPatterns = {
+            spiral: {
+                cooldown: 0.2,
+                callback: spawnBulletsAtAngle
+            },
+            burstRing: {
+                cooldown: 0.8,
+                callback: spawnBulletRing
+            },
+            towardsPlayer: {
+                cooldown: 0.6
+            }
+        }
 
         const boss1 = {
             type: "boss1",
@@ -42,16 +57,20 @@
             speed: 5,
             size: 30,
             hitboxRadius: 40,
-            health: 100
+            health: 100,
+            patterns: [
+                attackPatterns.spiral,
+                attackPatterns.burstRing
+            ]
         }
 
-        const sideSniper = {
-            type: "sideSniper",
-            speed: 5,
-            size: 20,
-            hitboxRadius: 40,
-            health: 20
-        }
+        // const sideSniper = {
+        //     type: "sideSniper",
+        //     speed: 5,
+        //     size: 20,
+        //     hitboxRadius: 40,
+        //     health: 20
+        // }
 
 
         const enemies = [];
@@ -64,22 +83,22 @@
         window.addEventListener('keydown', e => keys[e.key] = true);
         window.addEventListener('keyup', e => keys[e.key] = false);
 
-        let tick = 0;
-        let cooldown = 0;
+        function spawnBulletsAtAngle(cx, cy, angle, speed, radius, shooter) {
+            bullets.push({
+                alive: true,
+                shooter: shooter,
+                x: cx, y: cy,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                radius: 6
+            });
+        }
 
         // Spawn a ring of bullets
-        function spawnBulletRing(cx, cy, count, speed) {
-            for (let i = 0; i < count; i++) {
-                const angle = (i / count) * Math.PI * 2;
-                bullets.push({
-                    alive: true,
-                    shooter: "enemy",
-                    x: cx,
-                    y: cy,
-                    vx: Math.cos(angle) * speed,
-                    vy: Math.sin(angle) * speed,
-                    radius: 5
-                });
+        function spawnBulletRing(cx, cy, count, speed, radius) {
+            for (var i = 0; i < count; i++) {
+                var angle = (i / count) * Math.PI * 2;
+                spawnBulletsAtAngle(cx, cy, angle, speed, radius, "enemy")
             }
         }
 
@@ -112,7 +131,6 @@
         }
         
 
-        // Main Game Loop
         function update(dt) {
             if (gameOver) {
                 alert(`Game Over! Final Score: ${score}`);
@@ -122,101 +140,110 @@
 
             scoreEl.innerText = score;
 
-            tick += dt;
-            if (cooldown > 0) cooldown -= dt;
+            if (player.shotCooldown > 0) player.shotCooldown -= dt;
 
-            // --- Add Enemies ---
-            if (tick % 1 === 0) {
-                if (Math.random() > 0.5) {
-                    var leftSniper = sideSniper;
-                    leftSniper.x = 50;
-                    leftSniper.y = -10;
-                    enemies.push(leftSniper);
+            for (var e of enemies) {
+                for (var i; i < e.cooldowns.length; i++) {
+                    var c = cooldowns[i];
+                    if (c > 0) c -= dt;
                 }
-                else {
-                    var rightSniper = sideSniper;
-                    rightSniper.x = 550;
-                    rightSniper.y = -10;
-                    enemies.push(rightSniper);
-                }
-
             }
 
 
+            // // --- Add Enemies ---
+            // if (tick % 1 === 0) {
+            //     if (Math.random() > 0.5) {
+            //         var leftSniper = sideSniper;
+            //         leftSniper.x = 50;
+            //         leftSniper.y = -10;
+            //         enemies.push(leftSniper);
+            //     }
+            //     else {
+            //         var rightSniper = sideSniper;
+            //         rightSniper.x = 550;
+            //         rightSniper.y = -10;
+            //         enemies.push(rightSniper);
+            //     }
+            // }
+
+
             // --- Movement ---
-            if (keys['ArrowUp'] || keys['w']) player.y -= player.speed * dt;
-            if (keys['ArrowDown'] || keys['s']) player.y += player.speed * dt;
-            if (keys['ArrowLeft'] || keys['a']) player.x -= player.speed * dt;
-            if (keys['ArrowRight'] || keys['d']) player.x += player.speed * dt;
+            if (keys['ArrowUp']) player.y -= player.speed * dt;
+            if (keys['ArrowDown']) player.y += player.speed * dt;
+            if (keys['ArrowLeft']) player.x -= player.speed * dt;
+            if (keys['ArrowRight']) player.x += player.speed * dt;
 
             // Clamp player to screen
             player.x = Math.max(player.size, Math.min(canvas.width - player.size, player.x));
             player.y = Math.max(player.size, Math.min(canvas.height - player.size, player.y));
 
             //Player bullets
-            if (keys['z'] && cooldown == 0) {
+            if (keys['z'] && player.shotCooldown <= 0) {
                 bullets.push({
                     alive: true,
                     shooter: "player",
                     x: player.x,
                     y: player.y,
                     vx: 0,
-                    vy: -100,
+                    vy: -700,
                     radius: 5
                 });
-                cooldown = 10
+                player.shotCooldown = 0.1;
             }
 
 
             //Enemy AI
-            for (var e of enemies) {
-                if (e.type == "boss1") {
-                    // Pattern A: Spiral from center
-                    if (tick % 0.1 === 0) {
-                        const angle = (tick * 0.05) % (Math.PI * 2);
-                        bullets.push({
-                            alive: true,
-                            shooter: "enemy",
-                            x: e.x, y: e.y,
-                            vx: Math.cos(angle) * 300,
-                            vy: Math.sin(angle) * 300,
-                            radius: 6
-                        });
-                    }
-                    // Pattern B: Burst rings
-                    if (tick % 1 === 0) {
-                        spawnBulletRing(e.x, e.y, 16, 200);
-                    }
+            for (var i = 0; i < enemies.length; i++) {
+                var e = enemies[i];
+                //WIP: patterns are gonna be some sort of list with a callback in each 
+                for (var p of e.patterns) {
+
                 }
-                if (e.type == "sideSniper") {
-                    //Move
-                    e.y += e.speed * dt
-                    //Shoot
-                    if (tick % 0.2 === 0) {
-                        spawnBulletTowardsPlayer(e.x, e.y, player.x, player.y, 5);
-                    }
-                }
-                if (e.health == 0) {
-                    enemies.splice(enemies.findIndex(e), 1);
+
+                // if (e.type == "boss1") {
+                //     // Pattern A: Spiral from center
+                //     if (e.cooldowns[0] <= 0) {
+                //         var angle = (tick * 0.05) % (Math.PI * 2);
+                //         spawnBulletsAtAngle(e.x, e.y, angle, 300, 6);
+                //         e.cooldowns[0] = 0.2;
+                //     }
+                //     // Pattern B: Burst rings
+                //     if (e.cooldowns[1] <= 0) {
+                //         spawnBulletRing(e.x, e.y, 16, 200, 5);
+                //         e.cooldowns[1] = 0.8;
+                //     }
+                // }
+                // else if (e.type == "sideSniper") {
+                //     //Move
+                //     e.y += e.speed * dt
+                //     //Shoot towards player
+                //     if (tick % 0.2 === 0) {
+                //         spawnBulletTowardsPlayer(e.x, e.y, player.x, player.y, 5);
+                //     }
+                // }
+                if (e.health <= 0) {
+                    enemies.splice(i, 1);
                 }
             }
 
             // --- Update & Check Bullets ---
-            for (var b of bullets) {
+            for (var i = 0; i < bullets.length; i++) {
+                var b = bullets[i];
+
                 b.x += b.vx * dt;
                 b.y += b.vy * dt;
 
                 if (b.shooter == "enemy") {
-                    const dist = Math.hypot(b.x - player.x, b.y - player.y);
+                    var dist = Math.hypot(b.x - player.x, b.y - player.y);
                     if (dist < b.radius + player.hitboxRadius) {
                         gameOver = true;
-                        break;
+                        return;
                     }
                 }
 
                 if (b.shooter == "player") {
                     for (var e of enemies) {
-                        const dist = Math.hypot(b.x - e.x, b.y - e.y);
+                        var dist = Math.hypot(b.x - e.x, b.y - e.y);
                         if (dist < b.radius + e.hitboxRadius) {
                             b.alive = false;
                             e.health -= 10;
@@ -227,13 +254,17 @@
 
                 // Remove dead and off screen bullets
                 if (b.x < -10 || b.x > canvas.width + 10 || b.y < -10 || b.y > canvas.height + 10 || b.alive == false) {
-                    bullets.splice(bullets.findIndex(e), 1);
+                    bullets.splice(i, 1);
                 }
             }
 
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.font = "10px Arial";
             ctx.fillText("Delta " + dt, 10, 40);
+            ctx.fillText("bullets " + bullets.length, 10, 50);
+            ctx.fillText("enemies " + enemies.length, 10, 60);
+            ctx.fillText("cooldoqwn " + enemies[0].cooldowns[1], 10, 70);
 
             // Draw Enemies
             for (var e of enemies) {
@@ -277,7 +308,9 @@
             }
 
         }
-        loop();
+
+        requestAnimationFrame(loop);
+
     </script>
 </body>
 </html>
