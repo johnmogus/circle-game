@@ -7,7 +7,6 @@
     <style>
         body { margin: 0; background: #ff0000; color: white; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
         canvas { border: 2px solid #fff; background: #000; }
-        #ui { position: absolute; top: 10px; left: 10px; font-size: 20px; }
 
         .wrapper {
             position: relative;
@@ -31,11 +30,8 @@
     </style>
 </head>
 <body>
-    <!-- <div id="ui">Score: <span id="score">0</span></div>
-    <canvas id="gameCanvas" width="600" height="800"></canvas> -->
     <div class="wrapper">
         <div class="symbol">CIRCLE GAME</div>
-
         <canvas id="gameCanvas" width="600" height="800"></canvas>
     </div>
 
@@ -53,6 +49,7 @@
 
         // Game State
         let score = 0;
+        let gamePaused = false;
         let gameOver = false;
 
         const player = {
@@ -119,6 +116,8 @@
         window.addEventListener('keydown', e => keys[e.key] = true);
         window.addEventListener('keyup', e => keys[e.key] = false);
 
+
+
         function spawnBulletsAtAngle(cx, cy, angle, speed, radius, shooter) {
             bullets.push({
                 alive: true,
@@ -146,10 +145,10 @@
                 x: cx, y: cy,
                 vx: Math.cos(angle - Math.PI/2) * speed,
                 vy: Math.sin(angle + Math.PI/2) * speed,
-                radius: 6,
-                forget: 0.5
+                radius: 6
             });
         }
+
 
         
         function loop() {
@@ -166,30 +165,33 @@
 
             requestAnimationFrame(loop);
         }
+
+
+
         let spawnguys = 0;
 
         function update(dt) {
-            if (gameOver) {
-                alert(`Game Over! Final Score: ${score}`);
-                window.location.reload();
+            if (gamePaused) {
+                ctx.fillStyle = 'red';
+                ctx.textAlign = "center"; 
+                ctx.font = "25px Arial";
+                if (gameOver) {
+                    if (keys["Enter"]) window.location.reload();
+                    ctx.fillText(`Final Score: ${Math.floor(score)}`, 300, 400);
+                }
+                else {
+                    if (keys["Enter"]) gamePaused = false;
+                    ctx.fillText("Score: " + Math.floor(score), 300, 400);
+                }
                 return;
             }
 
             score += dt * 10;
 
-            
-            // --- Add Enemies ---
-            if (spawnguys > 0) spawnguys -= dt;
-            else {
-                enemies.push(sideSniper());
-                enemies[enemies.length-1].x = Math.floor(Math.random() * 600);;
-                enemies[enemies.length-1].y = -10;
-                spawnguys = 0;
-            }
 
+            if (keys['Escape']) gamePaused = true;
 
-
-            // --- Player Movement ---
+            // Player Movement
             if (keys['ArrowUp']) player.y -= player.speed * dt;
             if (keys['ArrowDown']) player.y += player.speed * dt;
             if (keys['ArrowLeft']) player.x -= player.speed * dt;
@@ -199,7 +201,7 @@
             player.x = Math.max(player.size, Math.min(canvas.width - player.size, player.x));
             player.y = Math.max(player.size, Math.min(canvas.height - player.size, player.y));
 
-            //Player bullets
+            // Player bullets
             if (player.shotCooldown > 0) player.shotCooldown -= dt;
             else if (keys['z']) {
                 bullets.push({
@@ -215,15 +217,24 @@
             }
 
 
+            // Add Enemies
+            if (spawnguys > 0) spawnguys -= dt;
+            else {
+                enemies.push(sideSniper());
+                enemies[enemies.length-1].x = Math.floor(Math.random() * canvas.width);;
+                enemies[enemies.length-1].y = -10;
+                spawnguys = 1;
+            }
+
             //Enemy movement and shoot patterns
             for (var i = 0; i < enemies.length; i++) {
                 var e = enemies[i];
 
                 //movement
                 if (e.type == "sideSniper") {
-                    var angle = Math.atan2(player.x - e.x, player.y - e.y);
-                    e.x += Math.cos(angle - Math.PI/2) * e.speed * dt;
-                    e.y += Math.sin(angle + Math.PI/2) * e.speed * dt;
+                    // var angle = Math.atan2(player.x - e.x, player.y - e.y);
+                    // e.x += Math.cos(angle - Math.PI/2) * e.speed * dt;
+                    // e.y += Math.sin(angle + Math.PI/2) * e.speed * dt;
 
                     e.y += dt * e.speed;
                 }
@@ -237,21 +248,21 @@
                         if (p.cooldown > 0) p.cooldown -= dt;
                         else {
                             var angle = p.cycle * (Math.PI * 2);
-                            spawnBulletsAtAngle(e.x, e.y, angle, p.speed, 6, "enemy");
+                            spawnBulletsAtAngle(e.x, e.y, angle, p.bulletSpeed, 6, "enemy");
                             p.cooldown = 0.1;
                         }
                     }
                     if (p == attackPatterns.burstRing) {
                         if (p.cooldown > 0) p.cooldown -= dt;
                         else {
-                            spawnBulletRing(e.x, e.y, 20, p.speed, 6);
+                            spawnBulletRing(e.x, e.y, 20, p.bulletSpeed, 6);
                             p.cooldown = 0.8;
                         }
                     }
                     if (p == attackPatterns.towardsPlayer) {
                         if (p.cooldown > 0) p.cooldown -= dt;
                         else {
-                            spawnBulletTowardsPlayer(e.x, e.y, player.x, player.y, p.speed);
+                            spawnBulletTowardsPlayer(e.x, e.y, player.x, player.y, p.bulletSpeed);
                             p.cooldown = 1;
                         }
                     }
@@ -259,6 +270,12 @@
 
                 //kill
                 if (e.y > canvas.height + e.size || e.health <= 0) {
+                    if (e.type == "boss1") {
+                        var newBoss = boss1();
+                        newBoss.x = Math.floor(Math.random() * canvas.width);
+                        enemies.push(newBoss);
+                    }
+                    score += 100;
                     enemies.splice(i, 1);
                 }
             }
@@ -271,14 +288,9 @@
                 if (b.shooter == "enemy") {
                     var dist = Math.hypot(b.x - player.x, b.y - player.y);
                     if (dist < b.radius + player.hitboxRadius) {
+                        gamePaused = true;
                         gameOver = true;
                         return;
-                    }
-                    if (b.forget > 0) {
-                        var angle = Math.atan2(player.x - b.x, player.y - b.y);
-                        b.vx = Math.cos(angle - Math.PI/2) * 100;
-                        b.vy = Math.sin(angle + Math.PI/2) * 100;
-                        b.forget -= dt;
                     }
                 }
 
@@ -298,10 +310,7 @@
                 b.y += b.vy * dt;
 
                 // Remove dead and off screen bullets
-                if (b.x < -10 || b.x > canvas.width + 10 || b.y < -10 || b.y > canvas.height + 10) {
-                    if (b.alive == false) {
-                        score += 100;
-                    }
+                if (b.x < -10 || b.x > canvas.width + 10 || b.y < -10 || b.y > canvas.height + 10 || b.alive == false) {
                     bullets.splice(i, 1);
                 }
             }
@@ -309,17 +318,21 @@
 
             //Draw
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.textAlign = "start"; 
+            ctx.fillStyle = 'white';
             ctx.font = "25px Arial"
             ctx.fillText("Score: " + Math.floor(score), 300, 25);
             ctx.font = "10px Arial";
             ctx.fillText("bullets " + bullets.length, 10, 50);
             ctx.fillText("enemies " + enemies.length, 10, 60);
+
             
             // Draw Enemies
             for (var e of enemies) {
                 if (e.type == "boss1") {
                     if (e.health > 0) {
                         ctx.font = "25px Arial";
+                        ctx.fillStyle = 'white';
                         ctx.fillText("Health: " + e.health, 10, 25);
                     }
                     ctx.fillStyle = 'purple';
