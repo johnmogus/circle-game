@@ -5,14 +5,40 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Node.js Bullet Hell</title>
     <style>
-        body { margin: 0; background: #111; color: white; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+        body { margin: 0; background: #ff0000; color: white; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
         canvas { border: 2px solid #fff; background: #000; }
         #ui { position: absolute; top: 10px; left: 10px; font-size: 20px; }
+
+        .wrapper {
+            position: relative;
+        }
+        .symbol {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 500px;
+            color: black;
+            opacity: 1;
+            pointer-events: none; /* canvas still receives clicks */
+            z-index: 0;
+        }
+        #gameCanvas {
+            position: relative;
+            z-index: 1;        /* canvas sits on top */
+        }
     </style>
 </head>
 <body>
-    <div id="ui">Score: <span id="score">0</span></div>
-    <canvas id="gameCanvas" width="600" height="800"></canvas>
+    <!-- <div id="ui">Score: <span id="score">0</span></div>
+    <canvas id="gameCanvas" width="600" height="800"></canvas> -->
+    <div class="wrapper">
+        <div class="symbol">CIRCLE GAME</div>
+
+        <canvas id="gameCanvas" width="600" height="800"></canvas>
+    </div>
+
 
     <script>
         const canvas = document.getElementById('gameCanvas');
@@ -31,9 +57,10 @@
 
         const player = {
             x: 300, y: 700,
-            speed: 200,
+            speed: 400,
             size: 15,
             hitboxRadius: 4,
+            damage: 10,
             shotCooldown: 0
         };
 
@@ -41,41 +68,49 @@
             spiral: {
                 cooldown: 0.2,
                 cycle: 0,
-                callback: spawnBulletsAtAngle
+                bulletSpeed: 300
             },
             burstRing: {
                 cooldown: 0.8,
-                callback: spawnBulletRing
+                bulletSpeed: 200
             },
             towardsPlayer: {
-                cooldown: 0.6
+                cooldown: 0.6,
+                bulletSpeed: 100
             }
         }
 
-        const boss1 = {
-            type: "boss1",
-            x: 300, y: 200,
-            speed: 5,
-            size: 30,
-            hitboxRadius: 40,
-            health: 100,
-            patterns: [
-                attackPatterns.spiral,
-                attackPatterns.burstRing
-            ]
+        function boss1() {
+            return {
+                type: "boss1",
+                x: 300, y: 200,
+                speed: 5,
+                size: 30,
+                hitboxRadius: 40,
+                health: 100,
+                patterns: [
+                    attackPatterns.spiral,
+                    attackPatterns.burstRing
+                ]
+            };
         }
 
-        // const sideSniper = {
-        //     type: "sideSniper",
-        //     speed: 5,
-        //     size: 20,
-        //     hitboxRadius: 40,
-        //     health: 20
-        // }
+        function sideSniper() {
+            return {
+                type: "sideSniper",
+                speed: 200,
+                size: 20,
+                hitboxRadius: 40,
+                health: 10,
+                patterns: [
+                    attackPatterns.towardsPlayer
+                ]
+            };
+        }
 
 
         const enemies = [];
-        enemies.push(boss1);
+        enemies.push(boss1());
 
         const bullets = [];
 
@@ -91,7 +126,7 @@
                 x: cx, y: cy,
                 vx: Math.cos(angle) * speed,
                 vy: Math.sin(angle) * speed,
-                radius: 6
+                radius: radius
             });
         }
 
@@ -104,15 +139,16 @@
         }
 
         function spawnBulletTowardsPlayer(cx, cy, playerX, playerY, speed) {
-        const angle = Math.atan2(playerX - cx, playerY - cy);
-        bullets.push({
-            alive: true,
-            shooter: "enemy",
-            x: cx, y: cy,
-            vx: Math.cos(angle - Math.PI/2) * speed,
-            vy: Math.sin(angle + Math.PI/2) * speed,
-            radius: 6
-        });
+            const angle = Math.atan2(playerX - cx, playerY - cy);
+            bullets.push({
+                alive: true,
+                shooter: "enemy",
+                x: cx, y: cy,
+                vx: Math.cos(angle - Math.PI/2) * speed,
+                vy: Math.sin(angle + Math.PI/2) * speed,
+                radius: 6,
+                forget: 0.5
+            });
         }
 
         
@@ -124,13 +160,13 @@
             accumulator += delta;
 
             while (accumulator >= MS_PER_TICK) {
-                update(MS_PER_TICK / 1000); // pass deltaTime in seconds
+                update(MS_PER_TICK / 1000);
                 accumulator -= MS_PER_TICK;
             }
 
             requestAnimationFrame(loop);
         }
-        
+        let spawnguys = 0;
 
         function update(dt) {
             if (gameOver) {
@@ -139,29 +175,21 @@
                 return;
             }
 
-            scoreEl.innerText = score;
+            score += dt * 10;
 
-            if (player.shotCooldown > 0) player.shotCooldown -= dt;
-
-
-            // // --- Add Enemies ---
-            // if (tick % 1 === 0) {
-            //     if (Math.random() > 0.5) {
-            //         var leftSniper = sideSniper;
-            //         leftSniper.x = 50;
-            //         leftSniper.y = -10;
-            //         enemies.push(leftSniper);
-            //     }
-            //     else {
-            //         var rightSniper = sideSniper;
-            //         rightSniper.x = 550;
-            //         rightSniper.y = -10;
-            //         enemies.push(rightSniper);
-            //     }
-            // }
+            
+            // --- Add Enemies ---
+            if (spawnguys > 0) spawnguys -= dt;
+            else {
+                enemies.push(sideSniper());
+                enemies[enemies.length-1].x = Math.floor(Math.random() * 600);;
+                enemies[enemies.length-1].y = -10;
+                spawnguys = 0;
+            }
 
 
-            // --- Movement ---
+
+            // --- Player Movement ---
             if (keys['ArrowUp']) player.y -= player.speed * dt;
             if (keys['ArrowDown']) player.y += player.speed * dt;
             if (keys['ArrowLeft']) player.x -= player.speed * dt;
@@ -172,7 +200,8 @@
             player.y = Math.max(player.size, Math.min(canvas.height - player.size, player.y));
 
             //Player bullets
-            if (keys['z'] && player.shotCooldown <= 0) {
+            if (player.shotCooldown > 0) player.shotCooldown -= dt;
+            else if (keys['z']) {
                 bullets.push({
                     alive: true,
                     shooter: "player",
@@ -180,52 +209,56 @@
                     y: player.y,
                     vx: 0,
                     vy: -700,
-                    radius: 5
+                    radius: 10
                 });
                 player.shotCooldown = 0.1;
             }
 
 
-            //Enemy AI
+            //Enemy movement and shoot patterns
             for (var i = 0; i < enemies.length; i++) {
                 var e = enemies[i];
-                //WIP: patterns are gonna be some sort of list with a callback in each 
+
+                //movement
+                if (e.type == "sideSniper") {
+                    var angle = Math.atan2(player.x - e.x, player.y - e.y);
+                    e.x += Math.cos(angle - Math.PI/2) * e.speed * dt;
+                    e.y += Math.sin(angle + Math.PI/2) * e.speed * dt;
+
+                    e.y += dt * e.speed;
+                }
+
+                //patterns
                 for (var p of e.patterns) {
                     if (p == attackPatterns.spiral) {
-                        if (p.cycle <= 1) p.cycle += dt /2;
+                        if (p.cycle <= 1) p.cycle += dt;
                         else p.cycle = 0;
 
                         if (p.cooldown > 0) p.cooldown -= dt;
                         else {
-                            var angle = (p.cycle) * (Math.PI * 2);
-                            spawnBulletsAtAngle(e.x, e.y, angle, 300, 6);
-                            p.cooldown = 0.2;
+                            var angle = p.cycle * (Math.PI * 2);
+                            spawnBulletsAtAngle(e.x, e.y, angle, p.speed, 6, "enemy");
+                            p.cooldown = 0.1;
+                        }
+                    }
+                    if (p == attackPatterns.burstRing) {
+                        if (p.cooldown > 0) p.cooldown -= dt;
+                        else {
+                            spawnBulletRing(e.x, e.y, 20, p.speed, 6);
+                            p.cooldown = 0.8;
+                        }
+                    }
+                    if (p == attackPatterns.towardsPlayer) {
+                        if (p.cooldown > 0) p.cooldown -= dt;
+                        else {
+                            spawnBulletTowardsPlayer(e.x, e.y, player.x, player.y, p.speed);
+                            p.cooldown = 1;
                         }
                     }
                 }
 
-                // if (e.type == "boss1") {
-                //     // Pattern A: Spiral from center
-                //     if (e.cooldowns[0] <= 0) {
-                //         var angle = (tick * 0.05) % (Math.PI * 2);
-                //         spawnBulletsAtAngle(e.x, e.y, angle, 300, 6);
-                //         e.cooldowns[0] = 0.2;
-                //     }
-                //     // Pattern B: Burst rings
-                //     if (e.cooldowns[1] <= 0) {
-                //         spawnBulletRing(e.x, e.y, 16, 200, 5);
-                //         e.cooldowns[1] = 0.8;
-                //     }
-                // }
-                // else if (e.type == "sideSniper") {
-                //     //Move
-                //     e.y += e.speed * dt
-                //     //Shoot towards player
-                //     if (tick % 0.2 === 0) {
-                //         spawnBulletTowardsPlayer(e.x, e.y, player.x, player.y, 5);
-                //     }
-                // }
-                if (e.health <= 0) {
+                //kill
+                if (e.y > canvas.height + e.size || e.health <= 0) {
                     enemies.splice(i, 1);
                 }
             }
@@ -234,49 +267,60 @@
             for (var i = 0; i < bullets.length; i++) {
                 var b = bullets[i];
 
-                b.x += b.vx * dt;
-                b.y += b.vy * dt;
-
+                //enemy bullets
                 if (b.shooter == "enemy") {
                     var dist = Math.hypot(b.x - player.x, b.y - player.y);
                     if (dist < b.radius + player.hitboxRadius) {
                         gameOver = true;
                         return;
                     }
+                    if (b.forget > 0) {
+                        var angle = Math.atan2(player.x - b.x, player.y - b.y);
+                        b.vx = Math.cos(angle - Math.PI/2) * 100;
+                        b.vy = Math.sin(angle + Math.PI/2) * 100;
+                        b.forget -= dt;
+                    }
                 }
 
+                //player bullets
                 if (b.shooter == "player") {
                     for (var e of enemies) {
                         var dist = Math.hypot(b.x - e.x, b.y - e.y);
                         if (dist < b.radius + e.hitboxRadius) {
                             b.alive = false;
-                            e.health -= 10;
-                            score += 10;
+                            e.health -= player.damage;
                         }
                     }
                 }
 
+                //apply velocity
+                b.x += b.vx * dt;
+                b.y += b.vy * dt;
+
                 // Remove dead and off screen bullets
-                if (b.x < -10 || b.x > canvas.width + 10 || b.y < -10 || b.y > canvas.height + 10 || b.alive == false) {
+                if (b.x < -10 || b.x > canvas.width + 10 || b.y < -10 || b.y > canvas.height + 10) {
+                    if (b.alive == false) {
+                        score += 100;
+                    }
                     bullets.splice(i, 1);
                 }
             }
 
 
+            //Draw
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.font = "25px Arial"
+            ctx.fillText("Score: " + Math.floor(score), 300, 25);
             ctx.font = "10px Arial";
-            ctx.fillText("Delta " + dt, 10, 40);
             ctx.fillText("bullets " + bullets.length, 10, 50);
             ctx.fillText("enemies " + enemies.length, 10, 60);
-            ctx.fillText("cooldoqwn " + enemies[0].patterns[0].cooldown, 10, 70);
-
+            
             // Draw Enemies
             for (var e of enemies) {
                 if (e.type == "boss1") {
                     if (e.health > 0) {
                         ctx.font = "25px Arial";
                         ctx.fillText("Health: " + e.health, 10, 25);
-                        //ctx.fillRect(0, 20, e.health, 20)
                     }
                     ctx.fillStyle = 'purple';
                     ctx.beginPath();
