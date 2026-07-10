@@ -40,6 +40,7 @@
         const attackPatterns = {
             spiral: {
                 cooldown: 0.2,
+                cycle: 0,
                 callback: spawnBulletsAtAngle
             },
             burstRing: {
@@ -142,13 +143,6 @@
 
             if (player.shotCooldown > 0) player.shotCooldown -= dt;
 
-            for (var e of enemies) {
-                for (var i; i < e.cooldowns.length; i++) {
-                    var c = cooldowns[i];
-                    if (c > 0) c -= dt;
-                }
-            }
-
 
             // // --- Add Enemies ---
             // if (tick % 1 === 0) {
@@ -197,7 +191,17 @@
                 var e = enemies[i];
                 //WIP: patterns are gonna be some sort of list with a callback in each 
                 for (var p of e.patterns) {
+                    if (p == attackPatterns.spiral) {
+                        if (p.cycle <= 1) p.cycle += dt /2;
+                        else p.cycle = 0;
 
+                        if (p.cooldown > 0) p.cooldown -= dt;
+                        else {
+                            var angle = (p.cycle) * (Math.PI * 2);
+                            spawnBulletsAtAngle(e.x, e.y, angle, 300, 6);
+                            p.cooldown = 0.2;
+                        }
+                    }
                 }
 
                 // if (e.type == "boss1") {
@@ -264,7 +268,7 @@
             ctx.fillText("Delta " + dt, 10, 40);
             ctx.fillText("bullets " + bullets.length, 10, 50);
             ctx.fillText("enemies " + enemies.length, 10, 60);
-            ctx.fillText("cooldoqwn " + enemies[0].cooldowns[1], 10, 70);
+            ctx.fillText("cooldoqwn " + enemies[0].patterns[0].cooldown, 10, 70);
 
             // Draw Enemies
             for (var e of enemies) {
