@@ -318,13 +318,13 @@
 
             //Draw
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.textAlign = "start"; 
+            ctx.textAlign = "center"; 
             ctx.fillStyle = 'white';
             ctx.font = "25px Arial"
             ctx.fillText("Score: " + Math.floor(score), 300, 25);
-            ctx.font = "10px Arial";
-            ctx.fillText("bullets " + bullets.length, 10, 50);
-            ctx.fillText("enemies " + enemies.length, 10, 60);
+            // ctx.font = "10px Arial";
+            // ctx.fillText("bullets " + bullets.length, 10, 50);
+            // ctx.fillText("enemies " + enemies.length, 10, 60);
 
             
             // Draw Enemies
@@ -333,6 +333,7 @@
                     if (e.health > 0) {
                         ctx.font = "25px Arial";
                         ctx.fillStyle = 'white';
+                        ctx.textAlign = "start"; 
                         ctx.fillText("Health: " + e.health, 10, 25);
                     }
                     ctx.fillStyle = 'purple';
