@@ -39,18 +39,133 @@
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        const scoreEl = document.getElementById('score');
 
         const TICK_RATE = 60;
         const MS_PER_TICK = 1000 / TICK_RATE;
         let lastTick = performance.now();
         let accumulator = 0;
 
-
         // Game State
         let score = 0;
         let gamePaused = false;
         let gameOver = false;
+
+        const attackPatterns = {
+            spiral: {
+                cooldown: 0,
+                bulletSpeed: 300,
+                shotNumber: 0,
+                shotsPerCycle: 16
+            },
+            burstRing: {
+                cooldown: 0,
+                bulletSpeed: 200
+            },
+            towardsPlayer: {
+                cooldown: 0,
+                bulletSpeed: 100
+            }
+        }
+
+        class ShootPattern {
+            constructor(shotCooldown, bulletSpeed) {
+                this.shotCooldown = shotCooldown;
+                this.cooldownTimer = shotCooldown;
+                this.bulletSpeed = bulletSpeed;
+            }
+            update(x, y, dt) {}
+        }
+        class SpiralShootPattern extends ShootPattern {
+            constructor() {
+                super(0.1, 300)
+                this.shotsPerCycle = 16;
+                this.shotNumber = 0;
+            }
+            update(x, y, dt) {
+                if (this.shotNumber >= this.shotsPerCycle) this.shotNumber = 0;
+                if (this.cooldownTimer > 0) this.cooldownTimer -= dt;
+                else {
+                    var angle = (this.shotNumber / this.shotsPerCycle)*(Math.PI * 2);
+                    spawnBulletsAtAngle(e.x, e.y, angle, this.bulletSpeed, 6, "enemy");
+                    this.shotNumber++;
+                    this.cooldownTimer = shotCooldown;
+                }
+            }
+
+        }
+
+
+        class Entity {
+            constructor(x, y, health) {
+                this.x = x;
+                this.y = y;
+                this.health = health;
+            }
+            render() {
+                return;
+            }
+        }
+        
+        class Player extends Entity {
+            constructor(x, y, health, hitboxRadius, moveSpeed, damage) {
+                super(x, y, health);
+                this.hitboxRadius = hitboxRadius;
+                this.moveSpeed = moveSpeed;
+                this.damage = damage;
+                this.shotCooldown = 0.1;
+            }
+            render() {
+                //body
+                ctx.fillStyle = '#00ffcc';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 15, 0, Math.PI * 2);
+                ctx.fill();
+                //hitbox
+                ctx.fillStyle = 'red';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.hitboxRadius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+        
+        class Enemy extends Entity {
+            constructor(x, y, health, shootPatterns) {
+                super(x, y, health)
+                this.attackPatterns = shootPatterns;
+            }
+            shootUpdate() {
+                for (var p of shootPatterns) {
+                    p.update(this.x, this.y);
+                }
+            }
+        }
+
+        class Boss1 extends Enemy {
+            constructor(x, y) {
+                super(
+                    x, y, 
+                    health=100, 
+                    shootPatterns=[
+                        SpiralShootPattern,
+                        //burstRing
+                    ]
+                );
+                this.hitboxRadius = 40;
+                this.size = 30;
+                this.color = 'purple';
+            }
+            render() {
+                ctx.font = "25px Arial";
+                ctx.fillStyle = 'white';
+                ctx.textAlign = "start"; 
+                ctx.fillText("Health: " + this.health, 10, 25);
+
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
 
         const player = {
             x: 300, y: 700,
@@ -61,24 +176,7 @@
             shotCooldown: 0
         };
 
-        const attackPatterns = {
-            spiral: {
-                cooldown: 0.2,
-                cycle: 0,
-                bulletSpeed: 300
-            },
-            burstRing: {
-                cooldown: 0.8,
-                bulletSpeed: 200
-            },
-            towardsPlayer: {
-                cooldown: 0.6,
-                bulletSpeed: 100
-            }
-        }
-
-        function boss1() {
-            return {
+        const boss1 = {
                 type: "boss1",
                 x: 300, y: 200,
                 speed: 5,
@@ -89,25 +187,22 @@
                     attackPatterns.spiral,
                     attackPatterns.burstRing
                 ]
-            };
-        }
+        };
 
-        function sideSniper() {
-            return {
-                type: "sideSniper",
-                speed: 200,
-                size: 20,
-                hitboxRadius: 40,
-                health: 10,
-                patterns: [
-                    attackPatterns.towardsPlayer
-                ]
-            };
-        }
+        const sideSniper = {
+            type: "sideSniper",
+            speed: 200,
+            size: 20,
+            hitboxRadius: 40,
+            health: 10,
+            patterns: [
+                attackPatterns.towardsPlayer
+            ]
+        };
 
 
         const enemies = [];
-        enemies.push(boss1());
+        enemies.push(Object.create(boss1));
 
         const bullets = [];
 
@@ -220,7 +315,7 @@
             // Add Enemies
             if (spawnguys > 0) spawnguys -= dt;
             else {
-                enemies.push(sideSniper());
+                enemies.push(Object.create(sideSniper));
                 enemies[enemies.length-1].x = Math.floor(Math.random() * canvas.width);;
                 enemies[enemies.length-1].y = -10;
                 spawnguys = 1;
@@ -242,13 +337,13 @@
                 //patterns
                 for (var p of e.patterns) {
                     if (p == attackPatterns.spiral) {
-                        if (p.cycle <= 1) p.cycle += dt;
-                        else p.cycle = 0;
+                        if (p.shotNumber >= p.shotsPerCycle) p.shotNumber = 0;
 
                         if (p.cooldown > 0) p.cooldown -= dt;
                         else {
-                            var angle = p.cycle * (Math.PI * 2);
+                            var angle = (p.shotNumber / p.shotsPerCycle)*(Math.PI * 2);
                             spawnBulletsAtAngle(e.x, e.y, angle, p.bulletSpeed, 6, "enemy");
+                            p.shotNumber++;
                             p.cooldown = 0.1;
                         }
                     }
@@ -271,7 +366,7 @@
                 //kill
                 if (e.y > canvas.height + e.size || e.health <= 0) {
                     if (e.type == "boss1") {
-                        var newBoss = boss1();
+                        var newBoss = Object.create(boss1);
                         newBoss.x = Math.floor(Math.random() * canvas.width);
                         enemies.push(newBoss);
                     }
