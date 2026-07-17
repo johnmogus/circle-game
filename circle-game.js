@@ -24,6 +24,17 @@ function randInt(min, max) {
 function rand(min, max) {
     return (Math.random()*(max-min))+min;
 }
+function absSubtract(value, subtraction) {
+    if (value > 0) {
+        return value - subtraction;
+    }
+    else if (value < 0) {
+        return value + subtraction;
+    }
+    else {
+        return value;
+    }
+}
 
 function drawFilledCircle(x, y, radius, color) {
     ctx.fillStyle = color;
@@ -386,13 +397,18 @@ class Gib extends Entity {
         super(x, y, 1)
         this.vx = vx;
         this.vy = vy;
+        this.vxOnSpawn = vx;
+        this.vyOnSpawn = vy;
         this.radius = radius;
         this.color = color;
         this.startAngle = startAngle;
         this.endAngle = endAngle;
+        this.timerOnSpawn = timer;
         this.timer = timer;
     }
     step(dt) {
+        this.vx = this.vxOnSpawn * (this.timer / this.timerOnSpawn);
+        this.vy = this.vyOnSpawn * (this.timer / this.timerOnSpawn);
         this.x += this.vx * dt;
         this.y += this.vy * dt;
         if (this.timer > 0) this.timer -= dt;
@@ -409,10 +425,11 @@ class GibSpawner extends Entity{
     constructor(x, y, radius, color, amount) {
         super(x, y, 1);
         this.gibs = [];
+        this.angleOffset = Math.random();
         for (var i = 0; i < amount; i++) {
             var timer = rand(1, 2);
-            var startAngle = (i / amount) * (Math.PI * 2);
-            var endAngle = ((i+1) / amount) * (Math.PI * 2);
+            var startAngle = (i / amount) * (Math.PI * 2) + this.angleOffset;
+            var endAngle = ((i+1) / amount) * (Math.PI * 2) + this.angleOffset;
             var moveAngle = startAngle+((endAngle-startAngle)/2);
             var speed = randInt(35, 50);
             var vx = Math.cos(moveAngle) * speed;
