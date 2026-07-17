@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bullet Hell</title>
+    <style>
+        body { margin: 0; background: #ff0000; color: white; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+        canvas { border: 2px solid #fff; background: #000; }
+
+        .wrapper {
+            position: relative;
+        }
+        .symbol {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 400px;
+            color: black;
+            opacity: 1;
+            pointer-events: none; /* canvas still receives clicks */
+            z-index: 0;
+        }
+        #gameCanvas {
+            position: relative;
+            z-index: 1;        /* canvas sits on top */
+        }
+    </style>
+</head>
+<body>
+    <div class="wrapper">
+        <div class="symbol">CIRCLE GAME</div>
+        <canvas id="gameCanvas" width="600" height="800"></canvas>
+    </div>
+    <script src="/circle-game.js"></script>
+</body>
+</html>

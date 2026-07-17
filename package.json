@@ -1,25 +1,11 @@
 {
-  "name": "bullet-hell-game-nodejs",
+  "name": "circle-game",
   "version": "1.0.0",
-  "description": "",
-  "main": "server.js",
+  "description": "Circles",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "dev": "vercel dev"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "dependencies": {
-    "express": "^5.2.1"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/johnmogus/circle-game.git"
-  },
-  "bugs": {
-    "url": "https://github.com/johnmogus/circle-game/issues"
-  },
-  "homepage": "https://github.com/johnmogus/circle-game#readme"
+  "author": "me",
+  "license": "ISC"
 }
