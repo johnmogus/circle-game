@@ -7,10 +7,42 @@ const MS_PER_TICK = 1000 / TICK_RATE;
 let lastTick = performance.now();
 let accumulator = 0;
 
+function loop() {
+    const now = performance.now();
+    const delta = now - lastTick;
+    lastTick = now;
+
+    accumulator += delta;
+
+    while (accumulator >= MS_PER_TICK) {
+        update(MS_PER_TICK / 1000);
+        accumulator -= MS_PER_TICK;
+    }
+
+    requestAnimationFrame(loop);
+}
+
 // Input
 const keys = {};
 window.addEventListener('keydown', e => keys[e.key] = true);
 window.addEventListener('keyup', e => keys[e.key] = false);
+
+const controls = [
+    {
+        up: 'ArrowUp',
+        down: 'ArrowDown',
+        left: 'ArrowLeft',
+        right: 'ArrowRight',
+        shoot: 'Control'
+    },
+    {
+        up: 'w',
+        down: 's',
+        left: 'a',
+        right: 'd',
+        shoot: 'g'
+    }
+]
 
 // State
 let score = 0;
@@ -49,48 +81,6 @@ function drawFilledArc(x, y, radius, color, startAngle, endAngle) {
     ctx.lineTo(x, y);
     ctx.fill();
 }
-
-class Level {
-    constructor(waves) {
-        this.waves = waves;
-    }
-}
-
-class Wave {
-    constructor(enemySpawners) {
-        this.enemySpawners = enemySpawners;
-    }
-}
-
-class SpawnEnemies {
-    constructor(enemy, amount) {
-        this.enemy = enemy;
-        this.amount = amount;
-    }
-}
-
-//list of the levels
-// const levels = [
-//     new Level(
-//         [
-//             new Wave (
-//                 [
-//                     new SpawnEnemies(Boss1, 1),
-//                     new SpawnEnemies(SideSniper, 1)
-//                 ]
-//             )
-//         ]
-//     ),
-//     new Level(
-//         [
-//             new Wave (
-//                 [
-
-//                 ]
-//             )
-//         ]
-//     )
-// ];
 
 //base class for shootpatterns for enemies to have
 class ShootPattern {
@@ -155,7 +145,7 @@ class TowardsPlayerPattern extends ShootPattern {
         else {
             var closestPlayerX = null;
             var closestPlayerY = null;
-            for (var p of players) {
+            for (var p of players.entities) {
                 var dist = Math.hypot(x - p.x, y - p.y);
                 if (closestPlayerX == null || closestPlayerY == null) {
                     closestPlayerX = p.x;
@@ -186,19 +176,9 @@ class Entity {
     }
     step() {}
     hit() {}
+    handleDeath() {}
     entityRender() {}
     uiRender() {}
-}
-
-function updateEntities(list, dt) {
-    for (var i = 0; i < list.length; i++) {
-        var e = list[i];
-        e.step(dt);
-        if (e.health <= 0) {
-            gibs.push(new GibSpawner(e.x, e.y, e.radius, e.color, 12))
-            list.splice(i, 1);
-        }
-    }
 }
 
 class Bullet extends Entity {
@@ -215,6 +195,9 @@ class Bullet extends Entity {
             this.health = 0;
         }
     }
+    handleDeath() {
+        gibs.push(new GibSpawner(this.x, this.y, this.radius, this.color, 3));
+    }
     entityRender() {
         drawFilledCircle(this.x, this.y, this.radius, this.color)
     }
@@ -226,7 +209,7 @@ class PlayerBullet extends Bullet {
         this.color = '#00a5f1'
     }
     step(dt) {
-        for (var e of enemies) {
+        for (var e of enemies.entities) {
             var dist = Math.hypot(this.x - e.x, this.y - e.y);
             if (dist < this.radius + e.hitboxRadius) {
                 e.hit(this.damage);
@@ -247,7 +230,7 @@ class EnemyBullet extends Bullet {
         this.color = '#ff3336'
     }
     step(dt) {
-        for (var p of players) {
+        for (var p of players.entities) {
             var dist = Math.hypot(this.x - p.x, this.y - p.y);
             if (dist < this.radius + p.hitboxRadius && p.hitCooldownTimer <= 0) {
                 p.hit(this.damage);
@@ -263,8 +246,9 @@ class EnemyBullet extends Bullet {
 }
 
 class Player extends Entity {
-    constructor(x, y) {
+    constructor(x, y, index) {
         super(x, y, 1);
+        this.index = index;
         this.firstX = x;
         this.firstY = y;
         this.lives = 3;
@@ -279,10 +263,10 @@ class Player extends Entity {
         this.color = 'rgba(0, 255, 204, 1)';
     }
     step(dt) {
-        if (keys['ArrowUp']) this.y -= this.moveSpeed * dt;
-        if (keys['ArrowDown']) this.y += this.moveSpeed * dt;
-        if (keys['ArrowLeft']) this.x -= this.moveSpeed * dt;
-        if (keys['ArrowRight']) this.x += this.moveSpeed * dt;
+        if (keys[controls[this.index].up]) this.y -= this.moveSpeed * dt;
+        if (keys[controls[this.index].down]) this.y += this.moveSpeed * dt;
+        if (keys[controls[this.index].left]) this.x -= this.moveSpeed * dt;
+        if (keys[controls[this.index].right]) this.x += this.moveSpeed * dt;
 
         // Clamp player to screen
         this.x = Math.max(this.radius, Math.min(canvas.width - this.radius, this.x));
@@ -290,7 +274,7 @@ class Player extends Entity {
 
         // Player bullets
         if (this.shotCooldownTimer > 0) this.shotCooldownTimer -= dt;
-        else if (keys['z']) {
+        else if (keys[controls[this.index].shoot]) {
             bullets.push(new PlayerBullet(this.x, this.y, 0, -500, 6, this.bulletDamage));
             this.shotCooldownTimer = this.shotCooldown;
         }
@@ -314,6 +298,9 @@ class Player extends Entity {
     hit(damage) {
         this.health -= damage;
     }
+    handleDeath() {
+        gibs.push(new GibSpawner(this.x, this.y, this.radius, this.color, 12));
+    }
     entityRender() {
         //body
         drawFilledCircle(this.x, this.y, this.radius, this.color)
@@ -324,7 +311,7 @@ class Player extends Entity {
         ctx.textAlign = "center"; 
         ctx.fillStyle = 'white';
         ctx.font = "25px Arial"
-        ctx.fillText("Lives: " + Math.floor(players[0].lives), 500, 25);
+        ctx.fillText("Lives: " + Math.floor(this.lives), 500, 25);
     }
 }
 
@@ -340,6 +327,9 @@ class Enemy extends Entity {
     }
     hit(damage) {
         this.health -= damage;
+    }
+    handleDeath() {
+        gibs.push(new GibSpawner(this.x, this.y, this.radius, this.color, 30));
     }
 }
 
@@ -442,6 +432,7 @@ class GibSpawner extends Entity{
             var g = this.gibs[i];
             g.step(dt);
             if (g.health <= 0) {
+                gibs.push(new GibSpawner(g.x, g.y, g.radius, g.color, 2))
                 this.gibs.splice(i, 1);
             }
         }
@@ -453,27 +444,105 @@ class GibSpawner extends Entity{
     }
 }
 
-
-const players = [new Player(300, 700)];
-const enemies = [new Boss1(300, 200)];
-const bullets = [];
-const gibs = [];
-
-
-function loop() {
-    const now = performance.now();
-    const delta = now - lastTick;
-    lastTick = now;
-
-    accumulator += delta;
-
-    while (accumulator >= MS_PER_TICK) {
-        update(MS_PER_TICK / 1000);
-        accumulator -= MS_PER_TICK;
+class EntityList {
+    constructor(entities) {
+        this.entities = entities;
     }
-
-    requestAnimationFrame(loop);
+    push(entities) {
+        this.entities.push(entities);
+    }
+    stepAndKill(dt) {
+        for (var i = 0; i < this.entities.length; i++) {
+            var e = this.entities[i];
+            e.step(dt);
+            if (e.health <= 0) {
+                e.handleDeath();
+                this.entities.splice(i, 1);
+            }
+        }
+    }
+    entityRender() {
+        for (var e of this.entities) {
+            e.entityRender();
+        }
+    }
+    uiRender() {
+        for (var e of this.entities) {
+            e.uiRender();
+        }
+    }
 }
+class PlayerList extends EntityList{
+    constructor(players) {
+        super(players)
+    }
+    stepAndKill(dt) {
+        for (var i = 0; i < this.entities.length; i++) {
+            var e = this.entities[i];
+            e.step(dt);
+            if (e.lives <= 0) {
+                e.handleDeath();
+                this.entities.splice(i, 1);
+            }
+        }
+    }
+}
+
+const players = new PlayerList([
+    new Player(300, 700, 0),
+    new Player(300, 700, 1)
+]);
+const enemies = new EntityList([new Boss1(300, 200)]);
+const bullets = new EntityList([]);
+const gibs = new EntityList([]);
+
+
+const gamemodes = {
+    endless: function(dt) {},
+    levels: function(dt) {}
+}
+
+class Level {
+    constructor(waves) {
+        this.waves = waves;
+    }
+}
+
+class Wave {
+    constructor(enemySpawners) {
+        this.enemySpawners = enemySpawners;
+    }
+}
+
+class SpawnEnemies {
+    constructor(enemy, amount) {
+        this.enemy = enemy;
+        this.amount = amount;
+    }
+}
+
+//list of the levels
+// const levels = [
+//     new Level(
+//         [
+//             new Wave (
+//                 [
+//                     new SpawnEnemies(Boss1, 1),
+//                     new SpawnEnemies(SideSniper, 1)
+//                 ]
+//             )
+//         ]
+//     ),
+//     new Level(
+//         [
+//             new Wave (
+//                 [
+
+//                 ]
+//             )
+//         ]
+//     )
+// ];
 
 
 function update(dt) {
@@ -496,24 +565,18 @@ function update(dt) {
         return;
     }
 
-    score += dt * 10;
+    bullets.stepAndKill(dt);
+    players.stepAndKill(dt);
+    enemies.stepAndKill(dt);
+    gibs.stepAndKill(dt);
 
-    for (var i = 0; i < players.length; i++) {
-        var p = players[i];
-        p.step(dt);
-        if (p.lives <= 0) {
-            players.splice(i, 1);
-        }
-    }
-    if (players.length <= 0) {
+    if (players.entities.length <= 0) {
         gamePaused = true;
         gameOver = true;
         return;
     }
 
-    updateEntities(enemies, dt);
-    updateEntities(bullets, dt);
-    updateEntities(gibs, dt);
+
 
     //kill
     // if (e.y > canvas.height + e.size || e.health <= 0) {
@@ -530,34 +593,22 @@ function update(dt) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     // Draw Entities
-    for (var p of players) {
-        p.entityRender();
-    }
-    for (var e of enemies) {
-        e.entityRender();
-    }
-    for (var b of bullets) {
-        b.entityRender();
-    }
-    for (var g of gibs) {
-        g.entityRender();
-    }
+    bullets.entityRender();
+    players.entityRender();
+    enemies.entityRender();
+    gibs.entityRender();
 
     //Score and Other Stuff
     ctx.fillStyle = 'gray';
     ctx.fillRect(0, 0, canvas.width, 40)
 
-    for (var p of players) {
-        p.uiRender();
-    }
-    for (var e of enemies) {
-        e.uiRender();
-    }
+    players.uiRender();
+    enemies.uiRender();
 
     ctx.textAlign = "center"; 
     ctx.fillStyle = 'white';
     ctx.font = "25px Arial"
-    ctx.fillText("Score: " + Math.floor(score), 300, 25);
+    ctx.fillText("Score: " + Math.floor(score), 300, 30);
 
     // ctx.font = "10px Arial";
     // ctx.fillText("bullets " + bullets.length, 10, 50);
