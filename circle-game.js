@@ -202,7 +202,7 @@ class Bullet extends Entity {
         }
     }
     die() {
-        gibs.push(new GibSpawner(this.x, this.y, this.radius, this.color, 3));
+        gibs.push(new GibSpawner(this.x, this.y, this.radius, this.color, 9));
     }
     entityRender() {
         drawFilledCircle(this.x, this.y, this.radius, this.color)
@@ -287,6 +287,7 @@ class Player extends Entity {
         }
 
         if (this.health <= 0 && this.hitCooldownTimer <= 0) {
+            gibs.push(new GibSpawner(this.x, this.y, this.radius, this.color, 12));
             this.x = this.firstX;
             this.y = this.firstY;
             this.hitCooldownTimer = this.hitCooldown;
@@ -305,9 +306,7 @@ class Player extends Entity {
     hit(damage) {
         this.health -= damage;
     }
-    die() {
-        gibs.push(new GibSpawner(this.x, this.y, this.radius, this.color, 12));
-    }
+    die() {}
     entityRender() {
         //body
         drawFilledCircle(this.x, this.y, this.radius, this.color)
@@ -585,9 +584,11 @@ const gamestates = {
 
         if (keys['Enter']) {
             if (gamemode != null) {
+                reset();
                 for (var i = 0; i < playerAmount; i++) {
                     players.push(new Player(i*100+250, 700, i, '#00ffcc'));
                 }
+                enemies.push(new SideSniper(300, 200));
                 gamestate = gamestates.inGame;
                 return;
             }
@@ -615,30 +616,30 @@ const gamestates = {
     inGame: function(dt) {
         if (keys['Escape']) gamePaused = true;
         if (gameOver) {
-            if (keys["Enter"]) {
-                reset();
+            if (keys['q']) {
+                gamestate = gamestates.inMenu;
             }
         }
         else if (gamePaused) {
             if (keys["Enter"]) gamePaused = false;
-            ctx.fillStyle = 'red';
-            ctx.textAlign = "center"; 
-            ctx.font = "25px Arial";
-            ctx.fillText("Score: " + Math.floor(score), 300, 400);
-            return;
+            if (keys['q']) {
+                gamestate = gamestates.inMenu;
+            }
         }
 
-        if (gamemode != null) {
-            gamemode.spawn(dt);
-        }
+        if (!gamePaused) {
+            if (gamemode != null) {
+                gamemode.spawn(dt);
+            }
 
-        bullets.stepAndKill(dt);
-        players.stepAndKill(dt);
-        enemies.stepAndKill(dt);
-        gibs.stepAndKill(dt);
-        
-        if (players.entities.length <= 0) {
-            gameOver = true;
+            bullets.stepAndKill(dt);
+            players.stepAndKill(dt);
+            enemies.stepAndKill(dt);
+            gibs.stepAndKill(dt);
+            
+            if (players.entities.length <= 0) {
+                gameOver = true;
+            }
         }
 
         //RENDER
@@ -660,7 +661,14 @@ const gamestates = {
         players.uiRender();
         enemies.uiRender();
 
-        if (gameOver) drawText("Final Score: " + Math.floor(score), 300, 400, "25px Arial", "red", "center");
+        if (gamePaused) {
+            drawText("Score: " + Math.floor(score), 300, 400, "25px Arial", "red", "center");
+            drawText("Q to quit to menu", 300, 450, "25px Arial", "white", "center");
+        }
+        else if (gameOver) {
+            drawText("Final Score: " + Math.floor(score), 300, 400, "25px Arial", "red", "center");
+            drawText("Q to quit to menu", 300, 450, "25px Arial", "white", "center");
+        }
         else drawText("Score: " + Math.floor(score), 300, 30, "25px Arial", "white", "center");
 
     }
@@ -674,14 +682,12 @@ function update(dt) {
 }
 
 function reset() {
-    const players = new PlayerList([]);
-    const enemies = new EntityList([]);
-    const bullets = new EntityList([]);
-    const gibs = new EntityList([]);
+    players = new PlayerList([]);
+    enemies = new EntityList([]);
+    bullets = new EntityList([]);
+    gibs = new EntityList([]);
     gamePaused = false;
     gameOver = false;
-    gamestate = gamestates.inMenu;
-    gamemode = null;
     score = 0;
 }
 
