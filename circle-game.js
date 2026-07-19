@@ -81,6 +81,12 @@ function drawFilledArc(x, y, radius, color, startAngle, endAngle) {
     ctx.lineTo(x, y);
     ctx.fill();
 }
+function drawText(text, x, y, font, fillStyle, alignment) {
+    ctx.font = font;
+    ctx.fillStyle = fillStyle;
+    ctx.textAlign = alignment;
+    ctx.fillText(text, x, y);
+}
 
 //base class for shootpatterns for enemies to have
 class ShootPattern {
@@ -176,7 +182,7 @@ class Entity {
     }
     step() {}
     hit() {}
-    handleDeath() {}
+    die() {}
     entityRender() {}
     uiRender() {}
 }
@@ -195,7 +201,7 @@ class Bullet extends Entity {
             this.health = 0;
         }
     }
-    handleDeath() {
+    die() {
         gibs.push(new GibSpawner(this.x, this.y, this.radius, this.color, 3));
     }
     entityRender() {
@@ -246,7 +252,7 @@ class EnemyBullet extends Bullet {
 }
 
 class Player extends Entity {
-    constructor(x, y, index) {
+    constructor(x, y, index, color) {
         super(x, y, 1);
         this.index = index;
         this.firstX = x;
@@ -260,7 +266,8 @@ class Player extends Entity {
         this.shotCooldownTimer = 0;
         this.hitCooldown = 1;
         this.hitCooldownTimer = 0;
-        this.color = 'rgba(0, 255, 204, 1)';
+        this.firstColor = color;
+        this.color = color;
     }
     step(dt) {
         if (keys[controls[this.index].up]) this.y -= this.moveSpeed * dt;
@@ -287,18 +294,18 @@ class Player extends Entity {
             this.health = 1;
         }
         else if (this.hitCooldownTimer > 0) {
-            this.color = 'rgba(0, 255, 204, 0.5)';
+            this.color = this.firstColor + '77';
             this.hitCooldownTimer -= dt;
         }
         else {
-            this.color = 'rgba(0,255, 204, 1)';
+            this.color = this.firstColor;
         }
 
     }
     hit(damage) {
         this.health -= damage;
     }
-    handleDeath() {
+    die() {
         gibs.push(new GibSpawner(this.x, this.y, this.radius, this.color, 12));
     }
     entityRender() {
@@ -308,10 +315,7 @@ class Player extends Entity {
         drawFilledCircle(this.x, this.y, this.hitboxRadius, 'red')
     }
     uiRender() {
-        ctx.textAlign = "center"; 
-        ctx.fillStyle = 'white';
-        ctx.font = "25px Arial"
-        ctx.fillText("Lives: " + Math.floor(this.lives), 500, 25);
+        drawText("Lives: " + Math.floor(this.lives), 500, this.index*25+25, "25px Arial", "white", "center");
     }
 }
 
@@ -328,7 +332,7 @@ class Enemy extends Entity {
     hit(damage) {
         this.health -= damage;
     }
-    handleDeath() {
+    die() {
         gibs.push(new GibSpawner(this.x, this.y, this.radius, this.color, 30));
     }
 }
@@ -354,10 +358,7 @@ class Boss1 extends Enemy {
         drawFilledCircle(this.x, this.y, this.radius, this.color)
     }
     uiRender() {
-        ctx.font = "25px Arial";
-        ctx.fillStyle = 'white';
-        ctx.textAlign = "start"; 
-        ctx.fillText("Boss Health: " + this.health, 10, 25);
+        drawText("Boss Health: " + this.health, 10, 25, "25px Arial", "white", "start");
     }
 }
 
@@ -368,7 +369,7 @@ class SideSniper extends Enemy {
             10, 
             [new TowardsPlayerPattern()]
         );
-        this.moveSpeed = 100;
+        this.moveSpeed = 0;
         this.radius = 20;
         this.hitboxRadius = 30;
         this.color = 'purple';
@@ -432,7 +433,6 @@ class GibSpawner extends Entity{
             var g = this.gibs[i];
             g.step(dt);
             if (g.health <= 0) {
-                gibs.push(new GibSpawner(g.x, g.y, g.radius, g.color, 2))
                 this.gibs.splice(i, 1);
             }
         }
@@ -456,7 +456,7 @@ class EntityList {
             var e = this.entities[i];
             e.step(dt);
             if (e.health <= 0) {
-                e.handleDeath();
+                e.die();
                 this.entities.splice(i, 1);
             }
         }
@@ -472,6 +472,7 @@ class EntityList {
         }
     }
 }
+
 class PlayerList extends EntityList{
     constructor(players) {
         super(players)
@@ -481,26 +482,17 @@ class PlayerList extends EntityList{
             var e = this.entities[i];
             e.step(dt);
             if (e.lives <= 0) {
-                e.handleDeath();
+                e.die();
                 this.entities.splice(i, 1);
             }
         }
     }
 }
 
-const players = new PlayerList([
-    new Player(300, 700, 0),
-    new Player(300, 700, 1)
-]);
-const enemies = new EntityList([new Boss1(300, 200)]);
-const bullets = new EntityList([]);
-const gibs = new EntityList([]);
-
-
-const gamemodes = {
-    endless: function(dt) {},
-    levels: function(dt) {}
-}
+let players = new PlayerList([]);
+let enemies = new EntityList([new SideSniper(300, 200)]);
+let bullets = new EntityList([]);
+let gibs = new EntityList([]);
 
 class Level {
     constructor(waves) {
@@ -521,99 +513,176 @@ class SpawnEnemies {
     }
 }
 
-//list of the levels
-// const levels = [
-//     new Level(
-//         [
-//             new Wave (
-//                 [
-//                     new SpawnEnemies(Boss1, 1),
-//                     new SpawnEnemies(SideSniper, 1)
-//                 ]
-//             )
-//         ]
-//     ),
-//     new Level(
-//         [
-//             new Wave (
-//                 [
+// list of the levels
+const levels = [
+    new Level(
+        [
+            new Wave (
+                [
+                    new SpawnEnemies(Boss1, 1),
+                    new SpawnEnemies(SideSniper, 1)
+                ]
+            )
+        ]
+    ),
+    new Level(
+        [
+            new Wave (
+                [
 
-//                 ]
-//             )
-//         ]
-//     )
-// ];
+                ]
+            )
+        ]
+    )
+];
 
 
-function update(dt) {
-    if (keys['Escape']) gamePaused = true;
-    if (gamePaused) {
-        if (gameOver) {
-            if (keys["Enter"]) window.location.reload();
-            ctx.fillStyle = 'red';
-            ctx.textAlign = "center"; 
-            ctx.font = "25px Arial";
-            ctx.fillText(`Final Score: ${Math.floor(score)}`, 300, 400);
+class Gamemode {
+    constructor(spawnFunction, uiRenderFunction) {
+        this.spawn = spawnFunction;
+        this.uiRender = uiRenderFunction;
+    }
+    spawn(dt) {
+        this.spawn();
+    }
+    uiRender() {
+        this.uiRender();
+    }
+}
+const gamemodes = {
+    endless: new Gamemode(
+        //spawn
+        function(dt) {
+            
+        },
+        //uiRender
+        function(dt) {
+            
+        }
+    ),
+    levels: new Gamemode(
+        //spawn
+        function(dt) {
+            
+        },
+        //uiRender
+        function(dt) {
+            
+        }
+    ),
+}
+let gamemode = null;
+
+
+const gamestates = {
+    inMenu: function(dt) {
+        var selectedTextStyle = "25px Courier New";
+        var notSelectedTextStyle = "20px Courier New";
+        if (keys['ArrowLeft']) gamemode = gamemodes.endless;
+        else if (keys['ArrowRight']) gamemode = gamemodes.levels;
+        if (keys['ArrowUp'] && playerAmount < 2) playerAmount++;
+        else if (keys['ArrowDown'] && playerAmount > 1) playerAmount--;
+
+        if (keys['Enter']) {
+            if (gamemode != null) {
+                for (var i = 0; i < playerAmount; i++) {
+                    players.push(new Player(i*100+250, 700, i, '#00ffcc'));
+                }
+                gamestate = gamestates.inGame;
+                return;
+            }
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawText("Circle Game", 300, 300, "25px Courier New", "white", "center");
+        drawText("players: " + playerAmount, 300, 500, "25px Courier New", "white", "center");
+        if (gamemode == gamemodes.endless) {
+            var endlessTextStyle = selectedTextStyle;
+            var levelsTextStyle = notSelectedTextStyle;
+        }
+        else if (gamemode == gamemodes.levels) {
+            var endlessTextStyle = notSelectedTextStyle;
+            var levelsTextStyle = selectedTextStyle;
         }
         else {
+            var endlessTextStyle = notSelectedTextStyle;
+            var levelsTextStyle = notSelectedTextStyle;
+        }
+        drawText("Endless", 200, 400, endlessTextStyle, "white", "center");
+        drawText("Levels", 400, 400, levelsTextStyle, "white", "center");
+
+    },
+    inGame: function(dt) {
+        if (keys['Escape']) gamePaused = true;
+        if (gameOver) {
+            if (keys["Enter"]) {
+                reset();
+            }
+        }
+        else if (gamePaused) {
             if (keys["Enter"]) gamePaused = false;
             ctx.fillStyle = 'red';
             ctx.textAlign = "center"; 
             ctx.font = "25px Arial";
             ctx.fillText("Score: " + Math.floor(score), 300, 400);
+            return;
         }
-        return;
+
+        if (gamemode != null) {
+            gamemode.spawn(dt);
+        }
+
+        bullets.stepAndKill(dt);
+        players.stepAndKill(dt);
+        enemies.stepAndKill(dt);
+        gibs.stepAndKill(dt);
+        
+        if (players.entities.length <= 0) {
+            gameOver = true;
+        }
+
+        //RENDER
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        //ENTITIES
+        bullets.entityRender();
+        players.entityRender();
+        enemies.entityRender();
+        gibs.entityRender();
+
+        //UI
+
+        if (gamemode != null) {
+            gamemode.uiRender();
+        }
+
+
+        players.uiRender();
+        enemies.uiRender();
+
+        if (gameOver) drawText("Final Score: " + Math.floor(score), 300, 400, "25px Arial", "red", "center");
+        else drawText("Score: " + Math.floor(score), 300, 30, "25px Arial", "white", "center");
+
     }
-
-    bullets.stepAndKill(dt);
-    players.stepAndKill(dt);
-    enemies.stepAndKill(dt);
-    gibs.stepAndKill(dt);
-
-    if (players.entities.length <= 0) {
-        gamePaused = true;
-        gameOver = true;
-        return;
-    }
+}
+let playerAmount = 1;
+let gamestate = gamestates.inMenu;
 
 
+function update(dt) {
+    gamestate(dt);
+}
 
-    //kill
-    // if (e.y > canvas.height + e.size || e.health <= 0) {
-    //     if (e.type == "boss1") {
-    //         var newBoss = Object.create(boss1);
-    //         newBoss.x = Math.floor(Math.random() * canvas.width);
-    //         enemies.push(newBoss);
-    //     }
-    //     score += 100;
-    //     enemies.splice(i, 1);
-    // }
-
-    //Draw
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // Draw Entities
-    bullets.entityRender();
-    players.entityRender();
-    enemies.entityRender();
-    gibs.entityRender();
-
-    //Score and Other Stuff
-    ctx.fillStyle = 'gray';
-    ctx.fillRect(0, 0, canvas.width, 40)
-
-    players.uiRender();
-    enemies.uiRender();
-
-    ctx.textAlign = "center"; 
-    ctx.fillStyle = 'white';
-    ctx.font = "25px Arial"
-    ctx.fillText("Score: " + Math.floor(score), 300, 30);
-
-    // ctx.font = "10px Arial";
-    // ctx.fillText("bullets " + bullets.length, 10, 50);
-    // ctx.fillText("enemies " + enemies.length, 10, 60);
-
+function reset() {
+    const players = new PlayerList([]);
+    const enemies = new EntityList([]);
+    const bullets = new EntityList([]);
+    const gibs = new EntityList([]);
+    gamePaused = false;
+    gameOver = false;
+    gamestate = gamestates.inMenu;
+    gamemode = null;
+    score = 0;
 }
 
 requestAnimationFrame(loop);
