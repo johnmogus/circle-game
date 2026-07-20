@@ -7,7 +7,7 @@ const MS_PER_TICK = 1000 / TICK_RATE;
 let lastTick = performance.now();
 let accumulator = 0;
 
-function loop() {
+function update() {
     const now = performance.now();
     const delta = now - lastTick;
     lastTick = now;
@@ -15,11 +15,11 @@ function loop() {
     accumulator += delta;
 
     while (accumulator >= MS_PER_TICK) {
-        update(MS_PER_TICK / 1000);
+        mainLoop(MS_PER_TICK / 1000);
         accumulator -= MS_PER_TICK;
     }
 
-    requestAnimationFrame(loop);
+    requestAnimationFrame(update);
 }
 
 // Input
@@ -101,7 +101,6 @@ class ShootPattern {
     }
     step(x, y, dt) {}
 }
-
 class SpiralPattern extends ShootPattern {
     constructor(damage, radius, speed, shotCooldown, shotsPerCycle) {
         super(damage, radius, speed, shotCooldown)
@@ -121,7 +120,6 @@ class SpiralPattern extends ShootPattern {
         }
     }
 }
-
 class BurstRingPattern extends ShootPattern {
     constructor(damage, radius, speed, shotCooldown, bulletAmount) {
         super(damage, radius, speed, shotCooldown)
@@ -141,7 +139,6 @@ class BurstRingPattern extends ShootPattern {
         }
     }
 }
-
 class TowardsPlayerPattern extends ShootPattern {
     constructor() {
         super(1, 5, 200, 0.5)
@@ -186,7 +183,6 @@ class Entity {
     entityRender() {}
     uiRender() {}
 }
-
 class Bullet extends Entity {
     constructor(x, y, vx, vy, radius, damage) {
         super(x, y, 1);
@@ -196,11 +192,7 @@ class Bullet extends Entity {
         this.damage = damage;
         this.color = '#ffffff'
     }
-    step(dt) {
-        if (this.x < -10 || this.x > canvas.width + 10 || this.y < -10 || this.y > canvas.height + 10) {
-            this.health = 0;
-        }
-    }
+    step(dt) {}
     die() {
         gibs.push(new GibSpawner(this.x, this.y, this.radius, this.color, 9));
     }
@@ -208,7 +200,6 @@ class Bullet extends Entity {
         drawFilledCircle(this.x, this.y, this.radius, this.color)
     }
 }
-
 class PlayerBullet extends Bullet {
     constructor(x, y, vx, vy, radius, damage) {
         super(x, y, vx, vy, radius, damage);
@@ -226,10 +217,8 @@ class PlayerBullet extends Bullet {
         this.x += this.vx * dt;
         this.y += this.vy * dt;
 
-        super.step(dt);
     }
 }
-
 class EnemyBullet extends Bullet {
     constructor(x, y, vx, vy, radius, damage) {
         super(x, y, vx, vy, radius, damage);
@@ -247,9 +236,9 @@ class EnemyBullet extends Bullet {
         this.x += this.vx * dt;
         this.y += this.vy * dt;
 
-        super.step(dt);
     }
 }
+
 
 class Player extends Entity {
     constructor(x, y, index, color) {
@@ -318,6 +307,7 @@ class Player extends Entity {
     }
 }
 
+
 class Enemy extends Entity {
     constructor(x, y, health, shootPatterns) {
         super(x, y, health)
@@ -335,22 +325,24 @@ class Enemy extends Entity {
         gibs.push(new GibSpawner(this.x, this.y, this.radius, this.color, 30));
     }
 }
-
 class Boss1 extends Enemy {
-    constructor(x, y) {
+    constructor(params) {
         super(
-            x, y, 
-            100, 
+            params.x, -params.radius, 
+            params.health, 
             [
                 new SpiralPattern(1, 6, 300, 0.1, 16),
                 new BurstRingPattern(1, 5, 200, 1, 20)
             ]
         );
-        this.radius = 30;
+        this.targetY = params.y;
+        this.moveSpeed = params.moveSpeed;
+        this.radius = params.radius;
         this.hitboxRadius = 40;
         this.color = 'purple';
     }
     step(dt) {
+        this.y += (this.targetY - this.y) * this.moveSpeed * dt;
         super.step(dt);
     }
     entityRender() {
@@ -360,16 +352,15 @@ class Boss1 extends Enemy {
         drawText("Boss Health: " + this.health, 10, 25, "25px Arial", "white", "start");
     }
 }
-
 class SideSniper extends Enemy {
-    constructor(x, y) {
+    constructor(params) {
         super(
-            x, y, 
-            10, 
+            params.x, -params.radius, 
+            params.health, 
             [new TowardsPlayerPattern()]
         );
-        this.moveSpeed = 0;
-        this.radius = 20;
+        this.moveSpeed = params.moveSpeed;
+        this.radius = params.radius;
         this.hitboxRadius = 30;
         this.color = 'purple';
     }
@@ -381,6 +372,7 @@ class SideSniper extends Enemy {
         drawFilledCircle(this.x, this.y, this.radius, this.color)
     }
 }
+
 
 class Gib extends Entity {
     constructor(x, y, vx, vy, radius, color, startAngle, endAngle, timer) {
@@ -410,7 +402,6 @@ class Gib extends Entity {
         drawFilledArc(this.x, this.y, this.radius, this.color, this.startAngle, this.endAngle)
     }
 }
-
 class GibSpawner extends Entity{
     constructor(x, y, radius, color, amount) {
         super(x, y, 1);
@@ -443,6 +434,7 @@ class GibSpawner extends Entity{
     }
 }
 
+
 class EntityList {
     constructor(entities) {
         this.entities = entities;
@@ -454,7 +446,10 @@ class EntityList {
         for (var i = 0; i < this.entities.length; i++) {
             var e = this.entities[i];
             e.step(dt);
-            if (e.health <= 0) {
+            if (e.x < -e.radius || e.x > canvas.width + e.radius || e.y < -e.radius || e.y > canvas.height + e.radius) {
+                this.entities.splice(i, 1);
+            }
+            else if (e.health <= 0) {
                 e.die();
                 this.entities.splice(i, 1);
             }
@@ -471,7 +466,6 @@ class EntityList {
         }
     }
 }
-
 class PlayerList extends EntityList{
     constructor(players) {
         super(players)
@@ -489,196 +483,237 @@ class PlayerList extends EntityList{
 }
 
 let players = new PlayerList([]);
-let enemies = new EntityList([new SideSniper(300, 200)]);
+let enemies = new EntityList([]);
 let bullets = new EntityList([]);
 let gibs = new EntityList([]);
+
 
 class Level {
     constructor(waves) {
         this.waves = waves;
     }
+    isFinished() {
+        var finishedAmount = 0;
+        for (var e in this.waves) {
+            if (e.isFinished()) finishedAmount++;
+        }
+        if (finishedAmount >= this.waves.length) return true;
+        else return false;
+    }
 }
-
 class Wave {
     constructor(enemySpawners) {
         this.enemySpawners = enemySpawners;
     }
+    isFinished() {
+        var finishedAmount = 0;
+        for (var e of this.enemySpawners) {
+            if (e.isFinished()) finishedAmount++;
+        }
+        if (finishedAmount >= this.enemySpawners.length) return true;
+        else return false;
+    }
 }
-
-class SpawnEnemies {
-    constructor(enemy, amount) {
+class enemySpawner {
+    constructor(enemy, parameters, amount, timeBetweenSpawns) {
         this.enemy = enemy;
+        this.parameters = parameters;
         this.amount = amount;
+        this.cooldown = timeBetweenSpawns;
+        this.cooldownTimer = timeBetweenSpawns;
+    }
+    spawn(dt) {
+        if (this.amount > 0) {
+            if (this.cooldownTimer > 0) this.cooldownTimer -= dt;
+            else {
+                enemies.push(new this.enemy(this.parameters));
+                this.amount--;
+                this.cooldownTimer = this.cooldown;
+            }
+        }
+    }
+    isFinished() {
+        return this.amount <= 0;
     }
 }
 
 // list of the levels
 const levels = [
-    new Level(
-        [
-            new Wave (
-                [
-                    new SpawnEnemies(Boss1, 1),
-                    new SpawnEnemies(SideSniper, 1)
-                ]
-            )
-        ]
-    ),
-    new Level(
-        [
-            new Wave (
-                [
-
-                ]
-            )
-        ]
-    )
+    new Level([
+        new Wave ([
+            new enemySpawner(Boss1, {x:200, y:200, radius:30, health:500, moveSpeed:50}, 1, 0),
+            new enemySpawner(SideSniper, {x:300, y:-10, radius:15, health:20, moveSpeed: 75}, 20, 1)
+        ]),
+        new Wave ([
+            new enemySpawner(Boss1, {x:200, y:200, radius:30, health:500, moveSpeed:50}, 1, 0),
+            new enemySpawner(SideSniper, {x:300, y:-10, radius:15, health:20, moveSpeed: 75}, 20, 1)
+        ])
+    ]),
+    new Level([
+        new Wave ([
+            new enemySpawner(Boss1, {x:300, y:200, radius:60, health:2000, moveSpeed:50}, 1, 0),
+            new enemySpawner(SideSniper, {x:150, y:-10, radius:15, health:20, moveSpeed: 75}, 20, 1),
+            new enemySpawner(SideSniper, {x:450, y:-10, radius:15, health:20, moveSpeed: 75}, 20, 1)
+        ])
+    ])
 ];
 
-
-class Gamemode {
-    constructor(spawnFunction, uiRenderFunction) {
-        this.spawn = spawnFunction;
-        this.uiRender = uiRenderFunction;
+class EndlessGamemode {
+    constructor() {}
+    spawn(dt) {}
+    uiRender() {}
+}
+class LevelsGamemode {
+    constructor(startingLevel) {
+        this.levels = Object.create(levels);
+        this.levelIndex = startingLevel;
+        this.waveIndex = 0;
     }
     spawn(dt) {
-        this.spawn();
+        var currentLevel = this.levels[this.levelIndex];
+        var currentWave = currentLevel.waves[this.waveIndex];
+
+        if (currentWave.isFinished() && enemies.entities.length <= 0) {
+            if (this.waveIndex >= currentLevel.waves.length - 1){
+                if (this.levelIndex >= this.levels.length - 1) {
+                    gameOver = true;
+                }
+                else {
+                    this.levelIndex++;
+                    this.waveIndex = 0;
+                }
+            }
+            else this.waveIndex++;
+        }
+        else {
+            for (var spawner of currentWave.enemySpawners) {
+                spawner.spawn(dt);
+            }
+        }
     }
     uiRender() {
-        this.uiRender();
+        drawText("Level: " + this.levelIndex, 100, 200, "15px Arial", "white", "center");
+        drawText("Wave: " + this.waveIndex, 100, 225, "15px Arial", "white", "center");
     }
-}
-const gamemodes = {
-    endless: new Gamemode(
-        //spawn
-        function(dt) {
-            
-        },
-        //uiRender
-        function(dt) {
-            
-        }
-    ),
-    levels: new Gamemode(
-        //spawn
-        function(dt) {
-            
-        },
-        //uiRender
-        function(dt) {
-            
-        }
-    ),
 }
 let gamemode = null;
 
 
 const gamestates = {
-    inMenu: function(dt) {
-        var selectedTextStyle = "25px Courier New";
-        var notSelectedTextStyle = "20px Courier New";
-        if (keys['ArrowLeft']) gamemode = gamemodes.endless;
-        else if (keys['ArrowRight']) gamemode = gamemodes.levels;
-        if (keys['ArrowUp'] && playerAmount < 2) playerAmount++;
-        else if (keys['ArrowDown'] && playerAmount > 1) playerAmount--;
+    menu: {
+        playerAmount: 1,
+        selectedGamemode: null,
+        loop: function(dt) {
+            var selectedTextStyle = "25px Courier New";
+            var notSelectedTextStyle = "20px Courier New";
+            if (keys['ArrowLeft']) this.selectedGamemode = new EndlessGamemode();
+            else if (keys['ArrowRight']) this.selectedGamemode = new LevelsGamemode(0);
+            if (keys['ArrowUp'] && this.playerAmount < 2) this.playerAmount++;
+            else if (keys['ArrowDown'] && this.playerAmount > 1) this.playerAmount--;
 
-        if (keys['Enter']) {
-            if (gamemode != null) {
-                reset();
-                for (var i = 0; i < playerAmount; i++) {
-                    players.push(new Player(i*100+250, 700, i, '#00ffcc'));
+            if (keys['Enter']) {
+                if (this.selectedGamemode != null) {
+                    reset();
+                    for (var i = 0; i < this.playerAmount; i++) {
+                        players.push(new Player(i*100+250, 700, i, '#00ffcc'));
+                    }
+                    gamemode = this.selectedGamemode;
+                    gamestate = gamestates.game;
+                    return;
                 }
-                enemies.push(new SideSniper(300, 200));
-                gamestate = gamestates.inGame;
-                return;
             }
-        }
 
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        drawText("Circle Game", 300, 300, "25px Courier New", "white", "center");
-        drawText("players: " + playerAmount, 300, 500, "25px Courier New", "white", "center");
-        if (gamemode == gamemodes.endless) {
-            var endlessTextStyle = selectedTextStyle;
-            var levelsTextStyle = notSelectedTextStyle;
-        }
-        else if (gamemode == gamemodes.levels) {
-            var endlessTextStyle = notSelectedTextStyle;
-            var levelsTextStyle = selectedTextStyle;
-        }
-        else {
-            var endlessTextStyle = notSelectedTextStyle;
-            var levelsTextStyle = notSelectedTextStyle;
-        }
-        drawText("Endless", 200, 400, endlessTextStyle, "white", "center");
-        drawText("Levels", 400, 400, levelsTextStyle, "white", "center");
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawText("Circle Game", 300, 300, "25px Courier New", "white", "center");
+            drawText("players: " + this.playerAmount, 300, 500, "25px Courier New", "white", "center");
+            if (this.selectedGamemode instanceof EndlessGamemode) {
+                var endlessTextStyle = selectedTextStyle;
+                var levelsTextStyle = notSelectedTextStyle;
+            }
+            else if (this.selectedGamemode instanceof LevelsGamemode) {
+                var endlessTextStyle = notSelectedTextStyle;
+                var levelsTextStyle = selectedTextStyle;
+            }
+            else {
+                var endlessTextStyle = notSelectedTextStyle;
+                var levelsTextStyle = notSelectedTextStyle;
+            }
+            drawText("Endless", 200, 400, endlessTextStyle, "white", "center");
+            drawText("Levels", 400, 400, levelsTextStyle, "white", "center");
 
+        }
     },
-    inGame: function(dt) {
-        if (keys['Escape']) gamePaused = true;
-        if (gameOver) {
-            if (keys['q']) {
-                gamestate = gamestates.inMenu;
+    game: {
+        loop: function(dt) {
+            if (keys['Escape']) gamePaused = true;
+            if (gameOver) {
+                if (keys['q']) {
+                    gamemode = null;
+                    gamestate = gamestates.menu;
+                }
             }
-        }
-        else if (gamePaused) {
-            if (keys["Enter"]) gamePaused = false;
-            if (keys['q']) {
-                gamestate = gamestates.inMenu;
-            }
-        }
-
-        if (!gamePaused) {
-            if (gamemode != null) {
-                gamemode.spawn(dt);
+            else if (gamePaused) {
+                if (keys["Enter"]) gamePaused = false;
+                if (keys['q']) {
+                    gamemode = null;
+                    gamestate = gamestates.menu;
+                }
             }
 
-            bullets.stepAndKill(dt);
-            players.stepAndKill(dt);
-            enemies.stepAndKill(dt);
-            gibs.stepAndKill(dt);
+            //STEP
+            if (!gamePaused) {
+                if (!gameOver) {
+                    if (gamemode != null) {
+                        gamemode.spawn(dt);
+                    }
+
+                    bullets.stepAndKill(dt);
+                    players.stepAndKill(dt);
+                    enemies.stepAndKill(dt);
+                    if (players.entities.length <= 0) {
+                        gameOver = true;
+                    }
+                }
+                gibs.stepAndKill(dt);
+            }
+
+
+            //RENDER
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            if (players.entities.length <= 0) {
-                gameOver = true;
+            //ENTITIES
+            bullets.entityRender();
+            players.entityRender();
+            enemies.entityRender();
+            gibs.entityRender();
+
+            //UI
+            players.uiRender();
+            enemies.uiRender();
+
+            if (gamemode != null) {
+                gamemode.uiRender();
             }
+
+            if (gamePaused) {
+                drawText("Score: " + Math.floor(score), 300, 400, "25px Arial", "red", "center");
+                drawText("Q to quit to menu", 300, 450, "25px Arial", "white", "center");
+            }
+            else if (gameOver) {
+                drawText("Final Score: " + Math.floor(score), 300, 400, "25px Arial", "red", "center");
+                drawText("Q to quit to menu", 300, 450, "25px Arial", "white", "center");
+            }
+            else drawText("Score: " + Math.floor(score), 300, 30, "25px Arial", "white", "center");
+
         }
-
-        //RENDER
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        //ENTITIES
-        bullets.entityRender();
-        players.entityRender();
-        enemies.entityRender();
-        gibs.entityRender();
-
-        //UI
-
-        if (gamemode != null) {
-            gamemode.uiRender();
-        }
-
-
-        players.uiRender();
-        enemies.uiRender();
-
-        if (gamePaused) {
-            drawText("Score: " + Math.floor(score), 300, 400, "25px Arial", "red", "center");
-            drawText("Q to quit to menu", 300, 450, "25px Arial", "white", "center");
-        }
-        else if (gameOver) {
-            drawText("Final Score: " + Math.floor(score), 300, 400, "25px Arial", "red", "center");
-            drawText("Q to quit to menu", 300, 450, "25px Arial", "white", "center");
-        }
-        else drawText("Score: " + Math.floor(score), 300, 30, "25px Arial", "white", "center");
-
     }
 }
-let playerAmount = 1;
-let gamestate = gamestates.inMenu;
+
+let gamestate = gamestates.menu;
 
 
-function update(dt) {
-    gamestate(dt);
+function mainLoop(dt) {
+    gamestate.loop(dt);
 }
 
 function reset() {
@@ -689,6 +724,7 @@ function reset() {
     gamePaused = false;
     gameOver = false;
     score = 0;
+    gamemode = null;
 }
 
-requestAnimationFrame(loop);
+requestAnimationFrame(update);
