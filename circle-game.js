@@ -87,89 +87,21 @@ function drawText(text, x, y, font, fillStyle, alignment) {
     ctx.textAlign = alignment;
     ctx.fillText(text, x, y);
 }
-
-//base class for shootpatterns for enemies to have
-class ShootPattern {
-    constructor(damage, radius, speed, shotCooldown) {
-        //cooldown in seconds
-        this.shotCooldown = shotCooldown;
-        //timer to be used with cooldown
-        this.cooldownTimer = 0;
-        this.speed = speed;
-        this.radius = radius;
-        this.damage = damage;
-    }
-    step(x, y, dt) {}
-}
-class SpiralPattern extends ShootPattern {
-    constructor(damage, radius, speed, shotCooldown, shotsPerCycle) {
-        super(damage, radius, speed, shotCooldown)
-        this.shotsPerCycle = shotsPerCycle;
-        this.shotNumber = 0;
-    }
-    step(x, y, dt) {
-        if (this.shotNumber >= this.shotsPerCycle) this.shotNumber = 0;
-        if (this.cooldownTimer > 0) this.cooldownTimer -= dt;
-        else {
-            var angle = (this.shotNumber / this.shotsPerCycle)*(Math.PI * 2);
-            var vx = Math.cos(angle) * this.speed;
-            var vy = Math.sin(angle) * this.speed;
-            bullets.push(new EnemyBullet(x, y, vx, vy, this.radius, this.damage));
-            this.shotNumber++;
-            this.cooldownTimer = this.shotCooldown;
+function findClosestEntity(x, y, entityList) {
+    var closestEntity = null;
+    for (var e of entityList.entities) {
+        var dist = Math.hypot(x - e.x, y - e.y);
+        if (closestEntity == null) {
+            closestEntity = e;
+            var prevDist = dist;
+        }
+        else if (dist < prevDist) {
+            closestEntity = e;
+            var prevDist = dist;
         }
     }
+    return closestEntity;
 }
-class BurstRingPattern extends ShootPattern {
-    constructor(damage, radius, speed, shotCooldown, bulletAmount) {
-        super(damage, radius, speed, shotCooldown)
-        //the amount of bullets in the ring
-        this.bulletAmount = bulletAmount;
-    }
-    step(x, y, dt) {
-        if (this.cooldownTimer > 0) this.cooldownTimer -= dt;
-        else {
-            for (var i = 0; i < this.bulletAmount; i++) {
-                var angle = (i / this.bulletAmount) * Math.PI * 2;
-                var vx = Math.cos(angle) * this.speed;
-                var vy = Math.sin(angle) * this.speed;
-                bullets.push(new EnemyBullet(x, y, vx, vy, this.radius, this.damage));
-            }
-            this.cooldownTimer = this.shotCooldown;
-        }
-    }
-}
-class TowardsPlayerPattern extends ShootPattern {
-    constructor() {
-        super(1, 5, 200, 0.5)
-    }
-    step(x, y, dt) {
-        if (this.shotCooldownTimer > 0) this.shotCooldownTimer -= dt;
-        else {
-            var closestPlayerX = null;
-            var closestPlayerY = null;
-            for (var p of players.entities) {
-                var dist = Math.hypot(x - p.x, y - p.y);
-                if (closestPlayerX == null || closestPlayerY == null) {
-                    closestPlayerX = p.x;
-                    closestPlayerY = p.y;
-                    var prevDist = dist;
-                }
-                else if (dist < prevDist) {
-                    closestPlayerX = p.x;
-                    closestPlayerY = p.y;
-                    var prevDist = dist;
-                }
-            }
-            var angle = Math.atan2(closestPlayerX - x, closestPlayerY - y);
-            var vx = Math.cos(angle - Math.PI/2) * this.speed;
-            var vy = Math.sin(angle + Math.PI/2) * this.speed;
-            bullets.push(new EnemyBullet(x, y, vx, vy, this.radius, this.damage));
-            this.shotCooldownTimer = this.shotCooldown;
-        }
-    }
-}
-
 
 class Entity {
     constructor(x, y, health) {
@@ -183,16 +115,26 @@ class Entity {
     entityRender() {}
     uiRender() {}
 }
-class Bullet extends Entity {
+
+class DamageEntity extends Entity {
+    constructor(x, y, damage) {
+        super (x, y, 1);
+        this.damage = damage;
+    }
+}
+class Bullet extends DamageEntity {
     constructor(x, y, vx, vy, radius, damage) {
-        super(x, y, 1);
+        super(x, y, damage);
         this.vx = vx;
         this.vy = vy;
         this.radius = radius;
         this.damage = damage;
         this.color = '#ffffff'
     }
-    step(dt) {}
+    step(dt) {
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+    }
     die() {
         gibs.push(new GibSpawner(this.x, this.y, this.radius, this.color, 9));
     }
@@ -213,10 +155,20 @@ class PlayerBullet extends Bullet {
                 this.health = 0;
             }
         }
-
-        this.x += this.vx * dt;
-        this.y += this.vy * dt;
-
+        super.step(dt);
+    }
+}
+class SeekingPlayerBullet extends PlayerBullet {
+    constructor(x, y, speed, radius, damage) {
+        super(x, y, 0, 0, radius, damage);
+        this.color = '#00a5f1'
+    }
+    step(dt) {
+        var closestEnemy = findClosestEntity(x, y, enemies);
+        var angle = Math.atan2(closestEnemy.x - x, closestEnemy.y - y);
+        vx = Math.cos(angle - Math.PI/2) * this.speed;
+        vy = Math.sin(angle + Math.PI/2) * this.speed;
+        super.step(dt);
     }
 }
 class EnemyBullet extends Bullet {
@@ -232,10 +184,7 @@ class EnemyBullet extends Bullet {
                 this.health = 0;
             }
         }
-
-        this.x += this.vx * dt;
-        this.y += this.vy * dt;
-
+        super.step(dt);
     }
 }
 
@@ -310,7 +259,7 @@ class Player extends Entity {
 
 class Enemy extends Entity {
     constructor(x, y, health, shootPatterns) {
-        super(x, y, health)
+        super(x, y, health);
         this.shootPatterns = shootPatterns;
     }
     step(dt) {
@@ -342,8 +291,13 @@ class Boss1 extends Enemy {
         this.color = 'purple';
     }
     step(dt) {
-        this.y += (this.targetY - this.y) * this.moveSpeed * dt;
-        super.step(dt);
+        if (this.y < this.targetY) {
+            this.y += this.moveSpeed * dt;
+            this.y = Math.min(this.y, this.targetY);
+        }
+        else {
+            super.step(dt);
+        }
     }
     entityRender() {
         drawFilledCircle(this.x, this.y, this.radius, this.color)
@@ -363,13 +317,90 @@ class SideSniper extends Enemy {
         this.radius = params.radius;
         this.hitboxRadius = 30;
         this.color = 'purple';
+
+        this.time = 0;
+        this.xFunc = params.xFunc || ((t, y) => params.x);
     }
     step(dt) {
+        this.time += dt;
         this.y += this.moveSpeed * dt;
+        this.x = this.xFunc(this.time, this.y);
         super.step(dt);
     }
     entityRender() {
         drawFilledCircle(this.x, this.y, this.radius, this.color)
+    }
+}
+
+class MovementPatterns {
+}
+    
+
+//base class for shootpatterns for enemies to have
+class ShootPattern {
+    constructor(damage, radius, speed, shotCooldown) {
+        //cooldown in seconds
+        this.shotCooldown = shotCooldown;
+        //timer to be used with cooldown
+        this.cooldownTimer = 0;
+        this.speed = speed;
+        this.radius = radius;
+        this.damage = damage;
+    }
+    step(x, y, dt) {}
+}
+class SpiralPattern extends ShootPattern {
+    constructor(damage, radius, speed, shotCooldown, shotsPerCycle) {
+        super(damage, radius, speed, shotCooldown)
+        this.shotsPerCycle = shotsPerCycle;
+        this.shotNumber = 0;
+    }
+    step(x, y, dt) {
+        if (this.shotNumber >= this.shotsPerCycle) this.shotNumber = 0;
+        if (this.cooldownTimer > 0) this.cooldownTimer -= dt;
+        else {
+            var angle = (this.shotNumber / this.shotsPerCycle)*(Math.PI * 2);
+            var vx = Math.cos(angle) * this.speed;
+            var vy = Math.sin(angle) * this.speed;
+            bullets.push(new EnemyBullet(x, y, vx, vy, this.radius, this.damage));
+            this.shotNumber++;
+            this.cooldownTimer = this.shotCooldown;
+        }
+    }
+}
+class BurstRingPattern extends ShootPattern {
+    constructor(damage, radius, speed, shotCooldown, bulletAmount) {
+        super(damage, radius, speed, shotCooldown)
+        //the amount of bullets in the ring
+        this.bulletAmount = bulletAmount;
+    }
+    step(x, y, dt) {
+        if (this.cooldownTimer > 0) this.cooldownTimer -= dt;
+        else {
+            for (var i = 0; i < this.bulletAmount; i++) {
+                var angle = (i / this.bulletAmount) * Math.PI * 2;
+                var vx = Math.cos(angle) * this.speed;
+                var vy = Math.sin(angle) * this.speed;
+                bullets.push(new EnemyBullet(x, y, vx, vy, this.radius, this.damage));
+            }
+            this.cooldownTimer = this.shotCooldown;
+        }
+    }
+}
+class TowardsPlayerPattern extends ShootPattern {
+    constructor() {
+        super(1, 5, 200, 0.5)
+    }
+    step(x, y, dt) {
+        if (this.shotCooldownTimer > 0) this.shotCooldownTimer -= dt;
+        else {
+            var closestPlayer = findClosestEntity(x, y, players);
+            var angle = Math.atan2(closestPlayer.x - x, closestPlayer.y - y);
+            var vx = Math.cos(angle - Math.PI/2) * this.speed;
+            var vy = Math.sin(angle + Math.PI/2) * this.speed;
+            bullets.push(new EnemyBullet(x, y, vx, vy, this.radius, this.damage));
+            this.shotCooldownTimer = this.shotCooldown;
+        }
     }
 }
 
@@ -542,7 +573,7 @@ const levels = [
     new Level([
         new Wave ([
             new enemySpawner(Boss1, {x:200, y:200, radius:30, health:500, moveSpeed:50}, 1, 0),
-            new enemySpawner(SideSniper, {x:300, y:-10, radius:15, health:20, moveSpeed: 75}, 20, 1)
+            new enemySpawner(SideSniper, {x:300, y:-10, radius:15, health:20, moveSpeed: 75, xFunc: (t, y) => 300 + Math.sin(y * 0.02) * 150}, 20, 1)
         ]),
         new Wave ([
             new enemySpawner(Boss1, {x:200, y:200, radius:30, health:500, moveSpeed:50}, 1, 0),
@@ -592,8 +623,8 @@ class LevelsGamemode {
         }
     }
     uiRender() {
-        drawText("Level: " + this.levelIndex, 100, 200, "15px Arial", "white", "center");
-        drawText("Wave: " + this.waveIndex, 100, 225, "15px Arial", "white", "center");
+        drawText("Level: " + this.levelIndex+1, 100, 200, "15px Arial", "white", "center");
+        drawText("Wave: " + this.waveIndex+1, 100, 225, "15px Arial", "white", "center");
     }
 }
 let gamemode = null;
@@ -619,6 +650,7 @@ const gamestates = {
                     }
                     gamemode = this.selectedGamemode;
                     gamestate = gamestates.game;
+                    this.selectedGamemode = null;
                     return;
                 }
             }
